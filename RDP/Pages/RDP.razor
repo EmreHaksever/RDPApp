@@ -1,0 +1,44 @@
+﻿@page "/rdp"
+@inject IHttpClientFactory HttpFactory
+
+<h3>RDP Connection</h3>
+
+<button @onclick="ConnectRDP">Connect to RDP</button>
+
+@if (!string.IsNullOrEmpty(IframeUrl))
+{
+    <iframe src="@IframeUrl" width="100%" height="600px"></iframe>
+}
+
+@code {
+    private string IframeUrl = "";
+
+    private async Task ConnectRDP()
+    {
+        try
+        {
+            // Mutlak URL ile HttpClient oluştur
+            var client = HttpFactory.CreateClient();
+
+            // Blazor portunu kullanarak mutlak URL
+            var tokenResponse = await client.GetFromJsonAsync<TokenResponse>("https://localhost:7156/api/rdp/token");
+
+            if (tokenResponse != null)
+            {
+                // Guacamole portu 8080, iframe URL’si
+                IframeUrl = $"http://localhost:8080/#/client/{tokenResponse.dataSource}?token={tokenResponse.token}&username=emre&id={tokenResponse.connectionId}";
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error connecting to RDP: {ex.Message}");
+        }
+    }
+
+    public class TokenResponse
+    {
+        public string token { get; set; } = "";
+        public string dataSource { get; set; } = "";
+        public string connectionId { get; set; } = "";
+    }
+}

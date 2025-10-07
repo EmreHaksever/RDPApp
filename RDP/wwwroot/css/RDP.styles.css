@@ -1,0 +1,18 @@
+﻿/* wwwroot/css/RDP.styles.css */
+iframe {
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+button {
+    padding: 8px 16px;
+    background-color: #0078d4;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+    button:hover {
+        background-color: #005a9e;
+    }

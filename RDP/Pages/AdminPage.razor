@@ -1,0 +1,58 @@
+﻿@page "/admin"
+@inject RDPApp.Services.GuacamoleService GuacService
+
+<h3>Guacamole RDP Bağlantısı</h3>
+
+<div class="mb-3">
+    <label>Guacamole Kullanıcı Adı:</label>
+    <input @bind="GuacUsername" class="form-control" />
+</div>
+
+<div class="mb-3">
+    <label>Guacamole Şifresi:</label>
+    <input @bind="GuacPassword" class="form-control" type="password" />
+</div>
+
+<div class="mb-3">
+    <label>RDP Host:</label>
+    <input @bind="RdpHost" class="form-control" />
+</div>
+
+<div class="mb-3">
+    <label>RDP Kullanıcı:</label>
+    <input @bind="RdpUsername" class="form-control" />
+</div>
+
+<div class="mb-3">
+    <label>RDP Şifre:</label>
+    <input @bind="RdpPassword" class="form-control" type="password" />
+</div>
+
+<button class="btn btn-primary" @onclick="CreateConnection">Bağlantı Oluştur</button>
+
+@if (!string.IsNullOrEmpty(ConnectionResult))
+{
+    <p class="mt-3">Sonuç: @ConnectionResult</p>
+}
+
+@code {
+    private string GuacUsername = "guacadmin";
+    private string GuacPassword = "guacadmin";
+    private string RdpHost = "192.168.1.100";
+    private string RdpUsername = "Administrator";
+    private string RdpPassword = "password";
+    private string? ConnectionResult;
+
+    private async Task CreateConnection()
+    {
+        var token = await GuacService.GetAuthTokenAsync(GuacUsername, GuacPassword);
+        if (token == null)
+        {
+            ConnectionResult = "❌ Guacamole giriş başarısız.";
+            return;
+        }
+
+        var result = await GuacService.CreateConnectionAsync(token, RdpHost, RdpUsername, RdpPassword);
+        ConnectionResult = result ?? "❌ Bağlantı oluşturulamadı.";
+    }
+}
