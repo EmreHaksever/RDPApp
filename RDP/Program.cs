@@ -1,14 +1,20 @@
 var builder = WebApplication.CreateBuilder(args);
+var BlazorAppBaseUrl = builder.Configuration["ASPNETCORE_URLS"]?.Split(';').FirstOrDefault()
+                       ?? "https://localhost:7156"; // Eðer ayar yoksa varsayýlaný kullan
+
 
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 
-// HttpClient BaseAddress ayarý
-builder.Services.AddHttpClient("ServerAPI", client =>
+builder.Services.AddHttpClient("GuacamoleAPI"); 
+
+builder.Services.AddScoped<RDPApp.Services.GuacamoleService>();
+
+builder.Services.AddScoped(sp => new HttpClient
 {
-    client.BaseAddress = new Uri("https://localhost:7156/"); // Blazor portun
+    // Blazor uygulamasýnýn kendisinin base adresini atýyoruz
+    BaseAddress = new Uri(BlazorAppBaseUrl)
 });
-builder.Services.AddScoped(sp => sp.GetRequiredService<IHttpClientFactory>().CreateClient("ServerAPI"));
 
 var app = builder.Build();
 

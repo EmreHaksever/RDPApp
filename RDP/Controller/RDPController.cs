@@ -1,43 +1,68 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿// Controllers/RDPController.cs
+
+using Microsoft.AspNetCore.Mvc;
+using RDPApp.Services;
+using System.Threading.Tasks;
 
 namespace RDPApp.Controllers
 {
-    public class RDPConnection
+    // Model, Blazor'dan RDP bilgilerini almak için kullanılır
+    public class RDPConnectModel
     {
-        public string Name { get; set; } = "";
-        public string Host { get; set; } = "";
-        public int Port { get; set; } = 3389;
-        public string Username { get; set; } = "";
-        public string Password { get; set; } = "";
-        public string ConnectionId { get; set; } = "";
+        // Name, Host, Port, Username, Password alanlarını tutar
+        public string Host { get; set; } = "192.168.1.1"; // Örnek IP
+        public string Username { get; set; } = "User";
+        public string Password { get; set; } = "Pass123";
     }
+
+    // Blazor Frontend'e gönderilecek Nihai Yanıt
+    public record GuacConnectInfo(string TunnelKey, string ConnectionId);
 
     [ApiController]
     [Route("api/[controller]")]
     public class RDPController : ControllerBase
     {
-        private static RDPConnection _connection = new RDPConnection();
+        private readonly GuacamoleService _guacamoleService;
 
-        [HttpPost("create")]
-        public IActionResult CreateConnection([FromBody] RDPConnection conn)
+        // Guacamole API'ye erişecek yönetici hesabı bilgileri (Gerçekte gizli tutulmalı!)
+        private const string GuacAdminUser = "guacadmin";
+        private const string GuacAdminPass = "guacadmin";
+
+        public RDPController(GuacamoleService guacamoleService)
         {
-            _connection = conn;
-            _connection.ConnectionId = "1"; // Örnek sabit ID
-            return Ok(new { message = "Connection created", connectionId = _connection.ConnectionId });
+            _guacamoleService = guacamoleService;
         }
 
-        [HttpGet("token")]
-        public IActionResult GetToken()
+        // Blazor'dan gelen RDP bilgilerini işleyip tünel anahtarını döndürür
+        [HttpPost("start-session")]
+        public async Task<IActionResult> StartSession([FromBody] RDPConnectModel model)
         {
-            // Örnek token – gerçekte Guacamole API'den al
-            string authToken = "F4E8C0160DC2F50C3EB8FDF7088F28FDD283EF849D7DB5D18BCFBC09697C02F9";
+            // 1. ADIM: Guacamole Admin Token'ını Al
+            var authToken = await _guacamoleService.GetAuthTokenAsync(GuacAdminUser, GuacAdminPass);
+            if (string.IsNullOrEmpty(authToken))
+                return Unauthorized(new { message = "Guacamole kimlik doğrulaması başarısız." });
 
-            return Ok(new
-            {
-                token = authToken,
-                connectionId = _connection.ConnectionId,
-                dataSource = "mysql"
-            });
+            // 2. ADIM: RDP Bilgileri ile Dinamik Bağlantı Oluştur
+            var connectionId = await _guacamoleService.CreateConnectionAsync(
+                authToken,
+                model.Host,
+                model.Username,
+                model.Password
+            );
+
+            if (string.IsNullOrEmpty(connectionId))
+                return StatusCode(500, new { message = "Guacamole bağlantısı oluşturulamadı." });
+
+            // 3. ADIM: Bağlantı ID'si ile Tünel Anahtarını (Session Key) Al
+            var tunnelKey = await _guacamoleService.GetTunnelKeyAsync(authToken, connectionId);
+
+            if (string.IsNullOrEmpty(tunnelKey))
+                return StatusCode(500, new { message = "Guacamole tünel anahtarı alınamadı." });
+
+            // Blazor ön yüzüne, WebSocket bağlantısı için gereken anahtarları gönder
+            return Ok(new GuacConnectInfo(tunnelKey, connectionId));
         }
+
+        // GetToken metodu artık kullanılmayacak, yerine StartSession kullanılacak.
     }
 }
