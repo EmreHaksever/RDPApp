@@ -1,9 +1,7 @@
 ﻿@page "/rdp"
 @inject HttpClient Http
 @inject IJSRuntime JSRuntime
-
-@using RDPApp.Controllers // Modeller için Controller referansı
-@using System.Net.Http.Json // PostAsJsonAsync ve ReadFromJsonAsync için gerekli
+@using System.Net.Http.Json
 
 <h3>Özgün RDP Bağlantısı (Blazor Kontrollü)</h3>
 
@@ -15,7 +13,6 @@
         <input id="rdpHost" class="form-control" @bind="ConnectionModel.Host" placeholder="Örn: 192.168.1.10" />
     </div>
 
-    @* GİZLİLİK KISITLAMASI: Sadece Admin ise göster *@
     @if (IsAdmin)
     {
         <div class="form-group mt-2">
@@ -45,20 +42,28 @@
     </div>
 }
 
-@if (ConnectionStarted)
-{
-    <h4 class="mt-4">Uzaktan Masaüstü Ekranı</h4>
-    <!-- RDP Ekranı buradaki div içinde görüntülenecektir -->
-    <div id="guacamole-display" style="width: 100%; height: 600px; border: 1px solid #007bff; background-color: #000; position: relative;">
-        <p class="text-white text-center p-5">Bağlantı Kuruluyor...</p>
-    </div>
-}
+<div id="guacamole-display" style="width: 100%; height: 600px; border: 1px solid #007bff; background-color: #000; position: relative; display: @(ConnectionStarted ? "block" : "none");">
+</div>
+
 
 @code {
-    // [Inject] direktifleri sayfanın en üstünde tanımlanmıştır, burada tekrar etmiyoruz.
+    // Controller'dan dönecek olan session bilgisi için YENİ ve DOĞRU sınıf
+    private class GuacSessionInfo
+    {
+        public string? AuthToken { get; set; }
+        public string? ConnectionId { get; set; }
+    }
+
+    // API'ye gönderilecek model
+    public class RDPConnectModel
+    {
+        public string Host { get; set; } = "";
+        public string Username { get; set; } = "";
+        public string Password { get; set; } = "";
+    }
 
     public bool IsAdmin { get; set; } = true;
-    public RDPApp.Controllers.RDPConnectModel ConnectionModel { get; set; } = new();
+    private RDPConnectModel ConnectionModel { get; set; } = new();
 
     private bool IsConnecting = false;
     private bool ConnectionStarted = false;
@@ -67,56 +72,47 @@
     private async Task ConnectRDP()
     {
         IsConnecting = true;
+        ConnectionStarted = false; // Her yeni denemede ekranı gizle
         ErrorMessage = "";
+        StateHasChanged();
 
         try
         {
-            // 1. RDP Bilgilerini Blazor Controller'a Gönder
             var response = await Http.PostAsJsonAsync("api/rdp/start-session", ConnectionModel);
 
             if (!response.IsSuccessStatusCode)
             {
-                // HATA YAKALAMA KRİTİK NOKTASI: Guacamole'den gelen JSON'u okuyoruz
                 string errorDetail = await response.Content.ReadAsStringAsync();
-
-                // Hata mesajını HTML formatında gösteriyoruz (MarkupString)
                 ErrorMessage =
-                    $"<strong class=\"d-block\">Durum Kodu:</strong> {response.StatusCode} ({response.ReasonPhrase})<br/>" +
-                    $"<strong class=\"d-block mt-2\">Guacamole Hata JSON'u:</strong> " +
-                    $"<pre class=\"bg-light text-dark p-2 rounded\">{System.Net.WebUtility.HtmlEncode(errorDetail)}</pre>";
-
-                // DEBUG: Hata detayını C# konsoluna da yazdıralım (Guacamole hatası için)
-                Console.WriteLine($"Guacamole API Hata Detayı: {errorDetail}");
-
+                    $"<strong class='d-block'>Durum Kodu:</strong> {response.StatusCode} ({response.ReasonPhrase})<br/>" +
+                    $"<strong class='d-block mt-2'>Guacamole Hata JSON'u:</strong> " +
+                    $"<pre class='bg-light text-dark p-2 rounded'>{System.Net.WebUtility.HtmlEncode(errorDetail)}</pre>";
                 return;
             }
 
-            // GuacConnectInfo modelini kullanıyoruz
-            var info = await response.Content.ReadFromJsonAsync<RDPApp.Controllers.GuacConnectInfo>();
+            // DÜZELTME 1: Doğru modeli (GuacSessionInfo) okuyoruz.
+            var sessionInfo = await response.Content.ReadFromJsonAsync<GuacSessionInfo>();
 
-            if (info != null && !string.IsNullOrEmpty(info.TunnelKey))
+            // DÜZELTME 2: Gelen AuthToken'i kontrol ediyoruz, TunnelKey'i değil!
+            if (sessionInfo != null && !string.IsNullOrEmpty(sessionInfo.AuthToken) && !string.IsNullOrEmpty(sessionInfo.ConnectionId))
             {
-                var websocketUrl = "ws://localhost:8080/websocket-tunnel";
-
                 ConnectionStarted = true;
-                StateHasChanged();
+                StateHasChanged(); // Div'in görünür olması için UI'ı güncelle
 
-                // 2. JS Interop ile Guacamole Client'ı başlat
+                // DÜZELTME 3: JavaScript'e AuthToken ve ConnectionId'yi gönderiyoruz.
                 await JSRuntime.InvokeVoidAsync("GuacInterop.startClient",
-                    websocketUrl,
-                    info.TunnelKey,
+                    sessionInfo.AuthToken,
+                    sessionInfo.ConnectionId,
                     "guacamole-display");
             }
             else
             {
-                ErrorMessage = "Sunucudan geçerli bir tünel anahtarı (TunnelKey) alınamadı. (JSON ayrıştırma hatası olabilir)";
+                ErrorMessage = "Sunucudan geçerli oturum bilgileri (AuthToken/ConnectionId) alınamadı.";
             }
         }
         catch (Exception ex)
         {
-            // Genel HTTP/JSON hataları
             ErrorMessage = $"Beklenmedik Hata: {ex.Message}";
-            Console.WriteLine($"Blazor HTTP/Genel Hata: {ex.Message}");
         }
         finally
         {

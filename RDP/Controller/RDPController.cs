@@ -6,25 +6,21 @@ using System.Threading.Tasks;
 
 namespace RDPApp.Controllers
 {
-    // Model, Blazor'dan RDP bilgilerini almak için kullanılır
     public class RDPConnectModel
     {
-        // Name, Host, Port, Username, Password alanlarını tutar
-        public string Host { get; set; } = "192.168.1.1"; // Örnek IP
+        public string Host { get; set; } = "192.168.1.1";
         public string Username { get; set; } = "User";
         public string Password { get; set; } = "Pass123";
     }
 
-    // Blazor Frontend'e gönderilecek Nihai Yanıt
-    public record GuacConnectInfo(string TunnelKey, string ConnectionId);
+    // YENİ YANIT MODELİ: Blazor'a Auth Token ve Connection ID'yi gönderiyoruz.
+    public record GuacSessionInfo(string AuthToken, string ConnectionId);
 
     [ApiController]
     [Route("api/[controller]")]
     public class RDPController : ControllerBase
     {
         private readonly GuacamoleService _guacamoleService;
-
-        // Guacamole API'ye erişecek yönetici hesabı bilgileri (Gerçekte gizli tutulmalı!)
         private const string GuacAdminUser = "guacadmin";
         private const string GuacAdminPass = "guacadmin";
 
@@ -33,7 +29,6 @@ namespace RDPApp.Controllers
             _guacamoleService = guacamoleService;
         }
 
-        // Blazor'dan gelen RDP bilgilerini işleyip tünel anahtarını döndürür
         [HttpPost("start-session")]
         public async Task<IActionResult> StartSession([FromBody] RDPConnectModel model)
         {
@@ -53,16 +48,11 @@ namespace RDPApp.Controllers
             if (string.IsNullOrEmpty(connectionId))
                 return StatusCode(500, new { message = "Guacamole bağlantısı oluşturulamadı." });
 
-            // 3. ADIM: Bağlantı ID'si ile Tünel Anahtarını (Session Key) Al
-            var tunnelKey = await _guacamoleService.GetTunnelKeyAsync(authToken, connectionId);
+            // 3. ADIM (DÜZELTİLDİ): Tünel anahtarı istemiyoruz.
+            // Bunun yerine, aldığımız AuthToken ve ConnectionId'yi doğrudan Blazor'a geri gönderiyoruz.
+            // JavaScript bu iki bilgiyi kullanarak WebSocket tünelini kuracak.
 
-            if (string.IsNullOrEmpty(tunnelKey))
-                return StatusCode(500, new { message = "Guacamole tünel anahtarı alınamadı." });
-
-            // Blazor ön yüzüne, WebSocket bağlantısı için gereken anahtarları gönder
-            return Ok(new GuacConnectInfo(tunnelKey, connectionId));
+            return Ok(new GuacSessionInfo(authToken, connectionId));
         }
-
-        // GetToken metodu artık kullanılmayacak, yerine StartSession kullanılacak.
     }
 }

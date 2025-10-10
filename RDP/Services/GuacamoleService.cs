@@ -72,7 +72,7 @@ namespace RDPApp.Services
                 // KRİTİK ÇÖZÜM: Sertifika ve NLA Hatalarını Atlatma
                 {"ignore-cert", "true"},
                 {"security", "any"},
-                {"disable-auth", "true"},
+                //{"disable-auth", "true"},
                 
                 // YENİ ÇÖZÜM: Bağlantı Zaman Aşımı Sürelerini Artırma (Saniye cinsinden)
                 {"timeout", "15000"}, // 15 saniye bağlantı kurma süresi

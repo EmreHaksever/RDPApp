@@ -1,54 +1,43 @@
-﻿// wwwroot/js/guac-interop.js
+﻿// wwwroot/js/guac-interop.js (SON SÜRÜM - DOĞRU URL İLE)
 
 window.GuacInterop = {
-    startClient: function (websocketUrl, tunnelKey, displayElementId) {
+    startClient: function (authToken, connectionId, displayElementId) {
 
-        // 1. Guacamole Kütüphanesinin Yüklü Olduğundan Emin Olun
-        // Bu kısım için index.html'e <script src="guacamole-common.js"></script> eklenmeli.
         if (typeof Guacamole === 'undefined') {
-            console.error("Guacamole JS client library (guacamole-common.js) is not loaded.");
+            console.error("Guacamole JS kütüphanesi yüklenemedi.");
             return;
         }
 
-        // 2. Guacamole İstemcisini Başlat
-        var client = new Guacamole.Client(
-            new Guacamole.WebSocketTunnel(websocketUrl + "?guac.resource=mysql&guac.id=" + tunnelKey)
-        );
+        // ==========================================================
+        // ===== ANA DEĞİŞİKLİK BURADA ==============================
+        // ==========================================================
+        // "/guacamole" kısmı, sizin kurulumunuz ana dizinde çalıştığı için kaldırıldı.
+        const tunnelUrl = "ws://localhost:8080/tunnel";
 
-        // 3. Görüntüleme Alanını Ayarla
-        var displayElement = document.getElementById(displayElementId);
+        const tunnel = new Guacamole.WebSocketTunnel(tunnelUrl);
+        const client = new Guacamole.Client(tunnel);
+
+        const displayElement = document.getElementById(displayElementId);
         if (displayElement) {
-            // Display'i HTML elementine ekle (Bu bir Canvas olacaktır)
+            while (displayElement.firstChild) {
+                displayElement.removeChild(displayElement.firstChild);
+            }
             displayElement.appendChild(client.getDisplay().getElement());
         }
 
-        // 4. Olay Dinleyicileri
-        client.onstatechange = function (state) {
-            console.log("Guacamole State Changed:", state);
-            // Bağlantı durumlarını burada Blazor'a bildirebilirsiniz (Örn: Bağlandı, Hata, Koptu)
-            // if (state === Guacamole.Client.State.CONNECTED) { ... }
-        };
-
         client.onerror = function (error) {
-            console.error("Guacamole Hata:", error.message);
-            // Hata mesajını Blazor'a göndermek için JSRuntime çağrılabilir.
+            console.error("Guacamole Client Hatası:", error);
+            alert("Bağlantı Hatası: " + error.message);
+            client.disconnect();
         };
 
-        // 5. Giriş Cihazlarını Ayarla (Klavye, Fare)
-        var mouse = new Guacamole.Mouse(client.getDisplay().getElement());
-        mouse.onmousemove = mouse.onmousedown = mouse.onmouseup = function (mouseState) {
-            client.sendMouse(mouseState);
+        client.onstatechange = function (clientState) {
+            if (clientState === 3) {
+                console.log("Guacamole client bağlandı.");
+            }
         };
 
-        var keyboard = new Guacamole.Keyboard(document);
-        keyboard.onkeydown = function (keysym) {
-            client.sendKeyEvent(1, keysym);
-        };
-        keyboard.onkeyup = function (keysym) {
-            client.sendKeyEvent(0, keysym);
-        };
-
-        // 6. Bağlan!
-        client.connect();
+        const connectionParams = "token=" + encodeURIComponent(authToken) + "&id=c%2F" + encodeURIComponent(connectionId);
+        client.connect(connectionParams);
     }
 };
