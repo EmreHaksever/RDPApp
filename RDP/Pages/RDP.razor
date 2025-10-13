@@ -58,27 +58,25 @@
 @if (ConnectionStarted)
 {
     <div class="card mt-4 shadow">
-        <div class="card-header bg-primary text-white">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
             <h5 class="mb-0">🖥️ Uzaktan Masaüstü</h5>
+            <small class="text-white-50">Connection ID: @sessionInfo?.ConnectionId</small>
         </div>
         <div class="card-body p-0" style="background: #000;">
-            <div id="guacamole-display"
-                 style="width: 100%;
-                            height: 700px;
-                            background: #1a1a1a;
-                            position: relative;
-                            overflow: hidden;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;">
-                <div class="text-white text-center p-5">
-                    <div class="spinner-border text-light mb-3"></div>
-                    <p>RDP yükleniyor...</p>
-                </div>
+            <div id="guacamole-display" 
+                 style="width: 100%; 
+                        height: 700px; 
+                        background: #000; 
+                        position: relative;
+                        overflow: hidden;">
             </div>
         </div>
     </div>
 }
+
+@code {
+    // Ekleme: Session bilgisini saklayalım
+    private GuacSessionInfo? sessionInfo;
 
 @code {
     private string Host { get; set; } = "192.168.1.1";
@@ -134,12 +132,12 @@
             await JSRuntime.InvokeVoidAsync(
                 "GuacInterop.startClient",
                 sessionInfo.AuthToken,        // 1. parametre: authToken
-                sessionInfo.ConnectionId,     // 2. parametre: connectionId
+                sessionInfo.ConnectionId,     // 2. parametre: connectionId  
                 "guacamole-display"          // 3. parametre: displayElementId
             );
 
             Console.WriteLine("✅ Guacamole başlatıldı");
-
+            
             DebugInfo += $"\n\n✅ JavaScript'e gönderildi:\n" +
                         $"• Token: {sessionInfo.AuthToken[..20]}...\n" +
                         $"• Connection ID: {sessionInfo.ConnectionId}\n" +
@@ -173,4 +171,4 @@
 
     // Model
     public record GuacSessionInfo(string AuthToken, string ConnectionId);
-}
+}}

@@ -135,19 +135,18 @@ window.GuacInterop = {
             const display = this.client.getDisplay();
             const canvas = display.getElement();
 
-            // Canvas boyutunu container'a göre ayarla
+            // Canvas'ı container'a tam sığdır
+            canvas.style.position = 'absolute';
+            canvas.style.left = '0';
+            canvas.style.top = '0';
             canvas.style.width = '100%';
             canvas.style.height = '100%';
-            canvas.style.display = 'block';
+            canvas.style.objectFit = 'contain'; // Aspect ratio'yu koru
 
             displayElement.appendChild(canvas);
             console.log('✅ Canvas eklendi');
-            console.log('📐 Canvas boyut:', canvas.width, 'x', canvas.height);
+            console.log('📐 Canvas internal boyut:', canvas.width, 'x', canvas.height);
             console.log('📐 Display element boyut:', displayElement.clientWidth, 'x', displayElement.clientHeight);
-
-            // Display scale'i ayarla (önemli!)
-            display.scale(1.0);
-            console.log('📏 Display scale ayarlandı: 1.0');
 
             // 7. Client state tracking
             this.client.onstatechange = (state) => {
@@ -156,6 +155,22 @@ window.GuacInterop = {
 
                 if (state === 3) { // CONNECTED
                     console.log('🎉 RDP BAŞARIYLA BAĞLANDI!');
+
+                    // Bağlantı kurulunca görüntüyü yenile
+                    setTimeout(() => {
+                        const display = this.client.getDisplay();
+                        console.log('🔄 Display refresh yapılıyor...');
+                        console.log('📐 Display layer boyut:', display.getWidth(), 'x', display.getHeight());
+
+                        // Otomatik boyutlandırma
+                        const scale = Math.min(
+                            displayElement.clientWidth / display.getWidth(),
+                            displayElement.clientHeight / display.getHeight()
+                        );
+                        display.scale(scale);
+                        console.log('📏 Auto-scale uygulandı:', scale);
+                    }, 500);
+
                 } else if (state === 5) { // DISCONNECTED
                     console.log('❌ Bağlantı kesildi');
                     displayElement.innerHTML = '<div class="text-white p-5 text-center">Bağlantı kesildi</div>';

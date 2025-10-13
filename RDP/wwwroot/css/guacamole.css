@@ -4,30 +4,31 @@
     position: relative;
     overflow: hidden;
     background: #000;
+    cursor: none; /* RDP cursor'ını göster */
 }
 
-    #guacamole-display canvas {
-        display: block;
+    #guacamole-display > canvas {
         position: absolute;
-        left: 50%;
-        top: 50%;
-        transform: translate(-50%, -50%);
-        cursor: none; /* RDP'deki cursor'ı göster */
+        left: 0;
+        top: 0;
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: contain;
+        image-rendering: optimizeSpeed;
+        image-rendering: -webkit-optimize-contrast;
+        image-rendering: optimize-contrast;
+        -ms-interpolation-mode: nearest-neighbor;
     }
 
+    /* Guacamole layer'ları */
     #guacamole-display .guac-display {
         position: absolute;
         left: 0;
         top: 0;
     }
 
-    /* Loading overlay */
-    #guacamole-display .loading-overlay {
+    /* Guacamole varsayılan cursor'u gizle */
+    #guacamole-display .guac-cursor {
         position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.8);
         z-index: 1000;
     }
