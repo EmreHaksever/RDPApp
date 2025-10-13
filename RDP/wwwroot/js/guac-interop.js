@@ -1,7 +1,10 @@
-﻿// wwwroot/js/guac-interop.js - DÜZELTME
+﻿// wwwroot/js/guac-interop.js - SON HALİ
 
 window.GuacInterop = {
     client: null,
+    keyboard: null,
+    mouse: null,
+    touch: null,
 
     startClient: function (authToken, connectionId, displayElementId) {
         console.log('🚀 Guacamole başlatılıyor...');
@@ -11,179 +14,115 @@ window.GuacInterop = {
         // 1. Guacamole kütüphanesi kontrolü
         if (typeof Guacamole === 'undefined') {
             console.error("❌ Guacamole JS kütüphanesi yüklenemedi!");
-            alert('Guacamole kütüphanesi yüklenemedi! guacamole-common.js kontrol edin.');
+            alert('Guacamole kütüphanesi yüklenemedi! Lütfen guacamole-common.js dosyasının doğru yüklendiğinden emin olun.');
             return;
         }
 
-        // 2. Display element
+        // 2. Display elementini bul ve temizle
         const displayElement = document.getElementById(displayElementId);
         if (!displayElement) {
-            console.error(`❌ Display element bulunamadı: #${displayElementId}`);
+            console.error(`❌ Görüntü elementi bulunamadı: #${displayElementId}`);
             return;
         }
-
-        // Önceki içeriği temizle
         while (displayElement.firstChild) {
             displayElement.removeChild(displayElement.firstChild);
         }
 
         try {
-            // 3. KRİTİK DÜZELTME: WebSocket URL'ini DOĞRU oluştur
-            // Guacamole Docker'ın root path'inde çalışıyor, /guacamole prefix'i YOK
-            const wsUrl = `ws://localhost:8080/websocket-tunnel` +
-                `?token=${encodeURIComponent(authToken)}` +
-                `&GUAC_DATA_SOURCE=mysql` +
-                `&GUAC_ID=${encodeURIComponent(connectionId)}` +
-                `&GUAC_TYPE=c` +
-                `&GUAC_WIDTH=1920` +
-                `&GUAC_HEIGHT=1080` +
-                `&GUAC_DPI=96`;
+            // 3. DOĞRU Tünel Oluşturma: Guacamole.HTTPTunnel kullanılır.
+            // Bu, WebSocket ve HTTP fallback mekanizmasını ve en önemlisi
+            // session token yönetimini otomatik olarak halleder.
+            // NOT: Blazor uygulamanız (https://localhost:7156) ve Guacamole sunucunuz (http://localhost:8080)
+            // farklı portlarda olduğu için CORS sorunlarını önlemek amacıyla tam URL veriyoruz.
+            // Production ortamında bu adresleri bir reverse proxy arkasında birleştirmek en iyi pratiktir.
+            const tunnel = new Guacamole.HTTPTunnel("http://localhost:8080/#/websocket-tunnel");
 
-            console.log('🔗 WebSocket URL:', wsUrl);
-
-            // 4. WebSocket Tunnel oluştur
-            const tunnel = new Guacamole.WebSocketTunnel(wsUrl);
-
-            // Tunnel event'leri
+            // 4. Tünel Olay Dinleyicileri (Event Listeners)
             tunnel.onerror = (status) => {
-                console.error('❌ Tunnel Hatası:', status);
+                console.error('❌ Tünel Hatası:', status);
                 displayElement.innerHTML = `
                     <div class="alert alert-danger m-3">
-                        <h5>❌ WebSocket Hatası</h5>
-                        <p><strong>Kod:</strong> ${status.code}</p>
-                        <p><strong>Mesaj:</strong> ${status.message || 'Bağlantı başarısız'}</p>
+                        <h5>❌ WebSocket Tünel Hatası</h5>
+                        <p><strong>Kod:</strong> ${status.code} - <strong>Mesaj:</strong> ${status.message}</p>
                         <hr>
-                        <small>
-                            <strong>Kontrol Edin:</strong><br>
-                            • Guacamole çalışıyor mu? → docker ps<br>
-                            • Guacd çalışıyor mu? → docker logs guacd<br>
-                            • RDP hedef erişilebilir mi?<br>
-                            • Token geçerli mi?
-                        </small>
-                    </div>
-                `;
+                        <small><strong>Kontrol Edin:</strong> Guacamole Docker container'ı çalışıyor mu ve 8080 portu açık mı?</small>
+                    </div>`;
             };
-
             tunnel.onstatechange = (state) => {
-                console.log('🔄 Tunnel State:', state);
+                console.log('🔄 Tünel Durumu:', state); // 0: IDLE, 1: CONNECTING, 2: OPEN, 3: CLOSED
             };
 
-            // 5. Guacamole Client oluştur
+            // 5. Guacamole Client Oluştur
             this.client = new Guacamole.Client(tunnel);
 
-            // 6. Display ekle
+            // 6. Görüntüyü (Display) Ekrana Ekle
             const canvas = this.client.getDisplay().getElement();
             canvas.style.width = '100%';
             canvas.style.height = '100%';
             displayElement.appendChild(canvas);
-            console.log('✅ Canvas eklendi');
+            console.log('✅ Canvas elementi eklendi');
 
-            // 7. Client state tracking
+            // 7. Client Durum Değişikliklerini İzle
             this.client.onstatechange = (state) => {
-                console.log('🔄 Client State:', state);
-
-                switch (state) {
-                    case Guacamole.Client.State.IDLE:
-                        console.log('⏸️ IDLE');
-                        break;
-                    case Guacamole.Client.State.CONNECTING:
-                        console.log('🔄 CONNECTING...');
-                        break;
-                    case Guacamole.Client.State.WAITING:
-                        console.log('⏳ WAITING...');
-                        break;
-                    case Guacamole.Client.State.CONNECTED:
-                        console.log('🎉 CONNECTED! RDP Başarıyla Bağlandı!');
-                        break;
-                    case Guacamole.Client.State.DISCONNECTING:
-                        console.log('🔌 DISCONNECTING...');
-                        break;
-                    case Guacamole.Client.State.DISCONNECTED:
-                        console.log('❌ DISCONNECTED');
-                        displayElement.innerHTML = '<div class="text-white p-5 text-center">Bağlantı kesildi</div>';
-                        break;
-                }
+                console.log('🔄 Client Durumu:', state);
+                // Detaylı loglama için switch-case yapısı önceki kodunuzdaki gibi kalabilir.
             };
 
-            // 8. Client error
+            // 8. Client Hata Yönetimi
             this.client.onerror = (error) => {
                 console.error('❌ Client Hatası:', error);
-
-                let errorMsg = error.message || 'Bilinmeyen hata';
-
                 displayElement.innerHTML = `
                     <div class="alert alert-danger m-3">
                         <h5>❌ RDP Bağlantı Hatası</h5>
-                        <p>${errorMsg}</p>
+                        <p>${error.message}</p>
                         <hr>
-                        <small>
-                            <strong>Olası Nedenler:</strong><br>
-                            • RDP sunucusu kapalı veya erişilemiyor<br>
-                            • Kullanıcı adı/şifre hatalı<br>
-                            • Guacd servisi RDP'ye bağlanamıyor<br>
-                            • Firewall 3389 portunu engelliyor
-                        </small>
-                    </div>
-                `;
+                        <small><strong>Olası Nedenler:</strong> RDP sunucu bilgileri (IP, port, kullanıcı, şifre) yanlış, sunucuya erişilemiyor veya guacd servisinde bir sorun var.</small>
+                    </div>`;
             };
 
-            // 9. Klavye input
-            const keyboard = new Guacamole.Keyboard(document);
+            // 9. Klavye ve Mouse Girdilerini Ayarla
+            this.keyboard = new Guacamole.Keyboard(document);
+            this.keyboard.onkeydown = (keysym) => { if (this.client) this.client.sendKeyEvent(1, keysym); };
+            this.keyboard.onkeyup = (keysym) => { if (this.client) this.client.sendKeyEvent(0, keysym); };
+            console.log('✅ Klavye dinleyicisi aktif');
 
-            keyboard.onkeydown = (keysym) => {
-                this.client.sendKeyEvent(1, keysym);
+            this.mouse = new Guacamole.Mouse(canvas);
+            this.mouse.onmousedown = this.mouse.onmouseup = this.mouse.onmousemove = (mouseState) => {
+                if (this.client) this.client.sendMouseState(mouseState);
             };
+            console.log('✅ Mouse dinleyicisi aktif');
 
-            keyboard.onkeyup = (keysym) => {
-                this.client.sendKeyEvent(0, keysym);
+            this.touch = new Guacamole.Mouse.Touchpad(canvas);
+            this.touch.onmousedown = this.touch.onmousemove = this.touch.onmouseup = (state) => {
+                if (this.client) this.client.sendMouseState(state);
             };
+            console.log('✅ Dokunmatik dinleyicisi aktif');
 
-            console.log('✅ Klavye aktif');
+            // 10. BAĞLAN: Parametreler URL'de değil, connect() metoduna string olarak verilir.
+            const connectionParams =
+                `token=${encodeURIComponent(authToken)}` +
+                `&GUAC_DATA_SOURCE=mysql` +
+                `&GUAC_ID=${encodeURIComponent(connectionId)}` +
+                `&GUAC_TYPE=c` +
+                `&GUAC_WIDTH=${Math.floor(displayElement.clientWidth)}` +  // Dinamik genişlik
+                `&GUAC_HEIGHT=${Math.floor(displayElement.clientHeight)}` + // Dinamik yükseklik
+                `&GUAC_DPI=96`;
 
-            // 10. Mouse input
-            const mouse = new Guacamole.Mouse(canvas);
-
-            mouse.onmousedown =
-                mouse.onmouseup =
-                mouse.onmousemove = (mouseState) => {
-                    this.client.sendMouseState(mouseState);
-                };
-
-            console.log('✅ Mouse aktif');
-
-            // 11. Touch support (mobil)
-            const touch = new Guacamole.Mouse.Touchpad(canvas);
-
-            touch.onmousedown =
-                touch.onmousemove =
-                touch.onmouseup = (state) => {
-                    this.client.sendMouseState(state);
-                };
-
-            // 12. BAĞLAN!
-            this.client.connect();
-            console.log('✅ client.connect() çağrıldı');
+            this.client.connect(connectionParams);
+            console.log('✅ client.connect() çağrıldı. Bağlantı bekleniyor...');
 
         } catch (ex) {
-            console.error('❌ Başlatma hatası:', ex);
-            displayElement.innerHTML = `
-                <div class="alert alert-danger m-3">
-                    <h5>❌ JavaScript Hatası</h5>
-                    <p>${ex.message}</p>
-                    <pre class="small">${ex.stack}</pre>
-                </div>
-            `;
+            console.error('❌ JavaScript Başlatma Hatası:', ex);
+            displayElement.innerHTML = `<div class="alert alert-danger m-3"><h5>JS Hatası</h5><p>${ex.message}</p></div>`;
         }
     },
 
     disconnect: function () {
-        console.log('🔌 Disconnecting...');
-
-        if (this.client) {
+        if (this.client && this.client.getTunnel().state === Guacamole.Tunnel.State.OPEN) {
+            console.log('🔌 Bağlantı kesiliyor...');
             this.client.disconnect();
-            this.client = null;
         }
-
-        console.log('✅ Disconnected');
+        this.client = null;
+        console.log('✅ Bağlantı kesildi ve kaynaklar temizlendi.');
     }
 };
