@@ -3,27 +3,25 @@
 @inject IJSRuntime JSRuntime
 @using System.Net.Http.Json
 
-<h3>Özgün RDP Bağlantısı (Blazor Kontrollü)</h3>
+<h3>RDP Bağlantısı</h3>
 
 <div class="card p-3 mb-4 shadow">
     <h4 class="mb-3">Bağlantı Bilgileri</h4>
 
     <div class="form-group">
-        <label for="rdpHost">RDP Host:</label>
-        <input id="rdpHost" class="form-control" @bind="ConnectionModel.Host" placeholder="Örn: 192.168.1.10" />
+        <label>RDP Host:</label>
+        <input class="form-control" @bind="Host" placeholder="192.168.1.100" />
     </div>
 
-    @if (IsAdmin)
-    {
-        <div class="form-group mt-2">
-            <label for="rdpUser">Kullanıcı Adı:</label>
-            <input id="rdpUser" class="form-control" @bind="ConnectionModel.Username" placeholder="Kullanıcı Adı" />
-        </div>
-        <div class="form-group mt-2">
-            <label for="rdpPass">Şifre:</label>
-            <input id="rdpPass" class="form-control" type="password" @bind="ConnectionModel.Password" placeholder="Şifre" />
-        </div>
-    }
+    <div class="form-group mt-2">
+        <label>Kullanıcı Adı:</label>
+        <input class="form-control" @bind="Username" placeholder="Administrator" />
+    </div>
+
+    <div class="form-group mt-2">
+        <label>Şifre:</label>
+        <input class="form-control" type="password" @bind="Password" />
+    </div>
 
     <button class="btn btn-primary mt-3" @onclick="ConnectRDP" disabled="@IsConnecting">
         @if (IsConnecting)
@@ -32,91 +30,139 @@
         }
         RDP Oturumunu Başlat
     </button>
+
+    @if (ConnectionStarted)
+    {
+        <button class="btn btn-danger mt-3 ms-2" @onclick="DisconnectRDP">
+            Bağlantıyı Kes
+        </button>
+    }
 </div>
 
 @if (!string.IsNullOrEmpty(ErrorMessage))
 {
     <div class="alert alert-danger mt-3">
-        <h5 class="alert-heading">Hata Detayı</h5>
-        <p>@((MarkupString)ErrorMessage)</p>
+        <h5>⚠️ Hata</h5>
+        <p>@ErrorMessage</p>
     </div>
 }
 
-<div id="guacamole-display" style="width: 100%; height: 600px; border: 1px solid #007bff; background-color: #000; position: relative; display: @(ConnectionStarted ? "block" : "none");">
-</div>
+@if (!string.IsNullOrEmpty(DebugInfo))
+{
+    <div class="alert alert-info mt-3">
+        <h6>🔍 Debug</h6>
+        <pre>@DebugInfo</pre>
+    </div>
+}
 
+@if (ConnectionStarted)
+{
+    <div class="card mt-4 shadow">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">🖥️ Uzaktan Masaüstü</h5>
+        </div>
+        <div class="card-body p-0">
+            <div id="guacamole-display" style="width: 100%; height: 700px; background: #1a1a1a;">
+                <div class="text-white text-center p-5">
+                    <div class="spinner-border text-light mb-3"></div>
+                    <p>RDP yükleniyor...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
-    // Controller'dan dönecek olan session bilgisi için YENİ ve DOĞRU sınıf
-    private class GuacSessionInfo
-    {
-        public string? AuthToken { get; set; }
-        public string? ConnectionId { get; set; }
-    }
-
-    // API'ye gönderilecek model
-    public class RDPConnectModel
-    {
-        public string Host { get; set; } = "";
-        public string Username { get; set; } = "";
-        public string Password { get; set; } = "";
-    }
-
-    public bool IsAdmin { get; set; } = true;
-    private RDPConnectModel ConnectionModel { get; set; } = new();
+    private string Host { get; set; } = "192.168.1.1";
+    private string Username { get; set; } = "User";
+    private string Password { get; set; } = "Pass123";
 
     private bool IsConnecting = false;
     private bool ConnectionStarted = false;
     private string ErrorMessage = "";
+    private string DebugInfo = "";
 
     private async Task ConnectRDP()
     {
         IsConnecting = true;
-        ConnectionStarted = false; // Her yeni denemede ekranı gizle
         ErrorMessage = "";
-        StateHasChanged();
+        DebugInfo = "";
 
         try
         {
-            var response = await Http.PostAsJsonAsync("api/rdp/start-session", ConnectionModel);
+            // 1. Backend'e RDP bilgilerini gönder
+            var model = new { Host, Username, Password };
+
+            DebugInfo = $"📡 İstek: POST /api/rdp/start-session\nHost: {Host}";
+
+            var response = await Http.PostAsJsonAsync("/api/rdp/start-session", model);
 
             if (!response.IsSuccessStatusCode)
             {
-                string errorDetail = await response.Content.ReadAsStringAsync();
-                ErrorMessage =
-                    $"<strong class='d-block'>Durum Kodu:</strong> {response.StatusCode} ({response.ReasonPhrase})<br/>" +
-                    $"<strong class='d-block mt-2'>Guacamole Hata JSON'u:</strong> " +
-                    $"<pre class='bg-light text-dark p-2 rounded'>{System.Net.WebUtility.HtmlEncode(errorDetail)}</pre>";
+                var error = await response.Content.ReadAsStringAsync();
+                ErrorMessage = $"Backend hatası: {response.StatusCode}\n{error}";
                 return;
             }
 
-            // DÜZELTME 1: Doğru modeli (GuacSessionInfo) okuyoruz.
+            // 2. Token ve Connection ID al
             var sessionInfo = await response.Content.ReadFromJsonAsync<GuacSessionInfo>();
 
-            // DÜZELTME 2: Gelen AuthToken'i kontrol ediyoruz, TunnelKey'i değil!
-            if (sessionInfo != null && !string.IsNullOrEmpty(sessionInfo.AuthToken) && !string.IsNullOrEmpty(sessionInfo.ConnectionId))
+            if (sessionInfo == null || string.IsNullOrEmpty(sessionInfo.AuthToken))
             {
-                ConnectionStarted = true;
-                StateHasChanged(); // Div'in görünür olması için UI'ı güncelle
+                ErrorMessage = "Sunucudan geçersiz yanıt alındı";
+                return;
+            }
 
-                // DÜZELTME 3: JavaScript'e AuthToken ve ConnectionId'yi gönderiyoruz.
-                await JSRuntime.InvokeVoidAsync("GuacInterop.startClient",
-                    sessionInfo.AuthToken,
-                    sessionInfo.ConnectionId,
-                    "guacamole-display");
-            }
-            else
-            {
-                ErrorMessage = "Sunucudan geçerli oturum bilgileri (AuthToken/ConnectionId) alınamadı.";
-            }
+            DebugInfo = $"✅ Token: {sessionInfo.AuthToken[..20]}...\n" +
+                       $"✅ Connection ID: {sessionInfo.ConnectionId}";
+
+            // 3. UI'yi güncelle ve DOM render bekle
+            ConnectionStarted = true;
+            StateHasChanged();
+            await Task.Delay(100); // DOM'un render olmasını bekle
+
+            // 4. ✅ JavaScript'e token ve connection ID gönder
+            // JavaScript tarafında tunnel ID REST API ile alınacak
+            await JSRuntime.InvokeVoidAsync(
+                "GuacInterop.startClient",
+                sessionInfo.AuthToken,        // 1. parametre: authToken
+                sessionInfo.ConnectionId,     // 2. parametre: connectionId
+                "guacamole-display"          // 3. parametre: displayElementId
+            );
+
+            Console.WriteLine("✅ Guacamole başlatıldı");
+
+            DebugInfo += $"\n\n✅ JavaScript'e gönderildi:\n" +
+                        $"• Token: {sessionInfo.AuthToken[..20]}...\n" +
+                        $"• Connection ID: {sessionInfo.ConnectionId}\n" +
+                        $"• Display Element: guacamole-display\n" +
+                        $"• Tunnel ID JavaScript tarafında alınacak";
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"Beklenmedik Hata: {ex.Message}";
+            ErrorMessage = $"Hata: {ex.Message}\n{ex.StackTrace}";
+            Console.WriteLine($"❌ ConnectRDP Error: {ex}");
         }
         finally
         {
             IsConnecting = false;
         }
     }
+
+    private async Task DisconnectRDP()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("GuacInterop.disconnect");
+            ConnectionStarted = false;
+            DebugInfo = "";
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Disconnect error: {ex.Message}");
+        }
+    }
+
+    // Model
+    public record GuacSessionInfo(string AuthToken, string ConnectionId);
 }

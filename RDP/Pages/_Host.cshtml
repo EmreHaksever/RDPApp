@@ -1,17 +1,17 @@
 ﻿@page "/"
 @using Microsoft.AspNetCore.Components.Web
-@namespace RDP.Pages
+@namespace RDPApp.Pages
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="tr">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="~/" />
     <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />
     <link href="css/site.css" rel="stylesheet" />
-    <link href="css/RDP.styles.css" rel="stylesheet" />
+    <link href="RDPApp.styles.css" rel="stylesheet" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <component type="typeof(HeadOutlet)" render-mode="ServerPrerendered" />
 </head>
@@ -29,10 +29,13 @@
         <a class="dismiss">🗙</a>
     </div>
 
-    <script src="js/guacamole-common.js"></script>
+    <!-- ✅ 1. ÖNCE GUACAMOLE KÜTÜPHANESІ -->
+    <script src="js/guacamole-common.min.js"></script>
 
+    <!-- ✅ 2. SONRA CUSTOM INTEROP -->
     <script src="js/guac-interop.js"></script>
 
+    <!-- ✅ 3. EN SONDA BLAZOR -->
     <script src="_framework/blazor.server.js"></script>
 </body>
 </html>
