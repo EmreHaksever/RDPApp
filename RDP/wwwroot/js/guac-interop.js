@@ -1,4 +1,4 @@
-﻿// wwwroot/js/guac-interop.js - ÇALIŞAN VERSİYON
+﻿// wwwroot/js/guac-interop.js - OTOMATİK FULL-SCREEN VERSİYONU
 
 window.GuacInterop = {
     client: null,
@@ -32,11 +32,8 @@ window.GuacInterop = {
         }
 
         try {
-            // 3. ✅ DOĞRU HTTPTunnel Endpoint
-            // Önce hangi endpoint'in çalıştığını tespit et
-            const tunnelUrl = "http://localhost:8080/tunnel"; // ROOT deployment için
-            // Eğer /guacamole prefix'i varsa: "http://localhost:8080/guacamole/tunnel"
-
+            // 3. HTTPTunnel Endpoint
+            const tunnelUrl = "http://localhost:8080/tunnel";
             const tunnel = new Guacamole.HTTPTunnel(tunnelUrl);
 
             console.log('🔗 Tunnel URL:', tunnelUrl);
@@ -47,62 +44,16 @@ window.GuacInterop = {
 
                 let errorMsg = '';
                 switch (status.code) {
-                    case 256: // UNSUPPORTED
-                        errorMsg = 'İstemci tarayıcı desteklenmiyor';
-                        break;
-                    case 512: // SERVER_ERROR
-                        errorMsg = 'Guacamole sunucu hatası';
-                        break;
-                    case 513: // SERVER_BUSY
-                        errorMsg = 'Sunucu meşgul, lütfen tekrar deneyin';
-                        break;
-                    case 514: // UPSTREAM_TIMEOUT
-                        errorMsg = 'RDP sunucusu zaman aşımına uğradı';
-                        break;
-                    case 515: // UPSTREAM_ERROR
-                        errorMsg = 'RDP bağlantı hatası (kullanıcı/şifre kontrol edin)';
-                        break;
-                    case 516: // RESOURCE_NOT_FOUND
-                        errorMsg = 'Connection bulunamadı (ID: ' + connectionId + ')';
-                        break;
-                    case 517: // RESOURCE_CONFLICT
-                        errorMsg = 'Bağlantı çakışması';
-                        break;
-                    case 518: // RESOURCE_CLOSED
-                        errorMsg = 'Bağlantı kapatıldı';
-                        break;
-                    case 519: // UPSTREAM_NOT_FOUND
-                        errorMsg = 'RDP sunucusuna ulaşılamıyor (IP/Port kontrol edin)';
-                        break;
-                    case 520: // UPSTREAM_UNAVAILABLE
-                        errorMsg = 'RDP sunucusu kullanılamıyor';
-                        break;
-                    case 521: // SESSION_CONFLICT
-                        errorMsg = 'Oturum çakışması';
-                        break;
-                    case 522: // SESSION_TIMEOUT
-                        errorMsg = 'Oturum zaman aşımı';
-                        break;
-                    case 523: // SESSION_CLOSED
-                        errorMsg = 'Oturum kapatıldı';
-                        break;
-                    case 768: // CLIENT_BAD_REQUEST
-                        errorMsg = 'Hatalı istek (Token veya parametreler geçersiz)';
-                        break;
-                    case 769: // CLIENT_UNAUTHORIZED
-                        errorMsg = 'Yetkilendirme hatası (Token geçersiz)';
-                        break;
-                    case 771: // CLIENT_FORBIDDEN
-                        errorMsg = 'Erişim reddedildi';
-                        break;
-                    case 776: // CLIENT_NOT_FOUND
-                        errorMsg = 'Kaynak bulunamadı';
-                        break;
-                    case 781: // CLIENT_TIMEOUT
-                        errorMsg = 'İstemci zaman aşımı';
-                        break;
-                    default:
-                        errorMsg = `Bilinmeyen hata (Kod: ${status.code})`;
+                    case 256: errorMsg = 'İstemci tarayıcı desteklenmiyor'; break;
+                    case 512: errorMsg = 'Guacamole sunucu hatası'; break;
+                    case 513: errorMsg = 'Sunucu meşgul, lütfen tekrar deneyin'; break;
+                    case 514: errorMsg = 'RDP sunucusu zaman aşımına uğradı'; break;
+                    case 515: errorMsg = 'RDP bağlantı hatası (kullanıcı/şifre kontrol edin)'; break;
+                    case 516: errorMsg = 'Connection bulunamadı (ID: ' + connectionId + ')'; break;
+                    case 519: errorMsg = 'RDP sunucusuna ulaşılamıyor (IP/Port kontrol edin)'; break;
+                    case 768: errorMsg = 'Hatalı istek (Token veya parametreler geçersiz)'; break;
+                    case 769: errorMsg = 'Yetkilendirme hatası (Token geçersiz)'; break;
+                    default: errorMsg = `Bilinmeyen hata (Kod: ${status.code})`;
                 }
 
                 displayElement.innerHTML = `
@@ -114,9 +65,8 @@ window.GuacInterop = {
                         <hr>
                         <small>
                             <strong>Kontrol Edin:</strong><br>
-                            • RDP sunucusu çalışıyor mu? (${connectionId} ID'li connection)<br>
+                            • RDP sunucusu çalışıyor mu?<br>
                             • Kullanıcı adı ve şifre doğru mu?<br>
-                            • Guacamole MySQL'de connection kaydı var mı?<br>
                             • Guacd servisine 'docker logs guacd' ile bakın
                         </small>
                     </div>
@@ -135,20 +85,19 @@ window.GuacInterop = {
             const display = this.client.getDisplay();
             const canvas = display.getElement();
 
-            // Canvas'ı container'a tam sığdır
             canvas.style.position = 'absolute';
             canvas.style.left = '0';
             canvas.style.top = '0';
             canvas.style.width = '100%';
             canvas.style.height = '100%';
-            canvas.style.objectFit = 'contain'; // Aspect ratio'yu koru
+            canvas.style.objectFit = 'contain';
 
             displayElement.appendChild(canvas);
             console.log('✅ Canvas eklendi');
-            console.log('📐 Canvas internal boyut:', canvas.width, 'x', canvas.height);
-            console.log('📐 Display element boyut:', displayElement.clientWidth, 'x', displayElement.clientHeight);
+            console.log('📐 Canvas boyut:', canvas.width, 'x', canvas.height);
+            console.log('📐 Container boyut:', displayElement.clientWidth, 'x', displayElement.clientHeight);
 
-            // 7. Client state tracking
+            // 7. Client state tracking + OTOMATİK FULL-SCREEN
             this.client.onstatechange = (state) => {
                 const states = ['IDLE', 'CONNECTING', 'WAITING', 'CONNECTED', 'DISCONNECTING', 'DISCONNECTED'];
                 console.log(`🔄 Client State: ${states[state] || state}`);
@@ -156,23 +105,19 @@ window.GuacInterop = {
                 if (state === 3) { // CONNECTED
                     console.log('🎉 RDP BAŞARIYLA BAĞLANDI!');
 
-                    // Bağlantı kurulunca görüntüyü yenile
+                    // ✅ OTOMATİK FULL-SCREEN AKTİFLEŞTİR
                     setTimeout(() => {
-                        const display = this.client.getDisplay();
-                        console.log('🔄 Display refresh yapılıyor...');
-                        console.log('📐 Display layer boyut:', display.getWidth(), 'x', display.getHeight());
-
-                        // Otomatik boyutlandırma
-                        const scale = Math.min(
-                            displayElement.clientWidth / display.getWidth(),
-                            displayElement.clientHeight / display.getHeight()
-                        );
-                        display.scale(scale);
-                        console.log('📏 Auto-scale uygulandı:', scale);
+                        this.enterFullScreen(displayElement);
                     }, 500);
 
                 } else if (state === 5) { // DISCONNECTED
                     console.log('❌ Bağlantı kesildi');
+
+                    // Full-screen'den çık
+                    if (document.fullscreenElement) {
+                        document.exitFullscreen().catch(err => console.warn('Exit fullscreen error:', err));
+                    }
+
                     displayElement.innerHTML = '<div class="text-white p-5 text-center">Bağlantı kesildi</div>';
                 }
             };
@@ -180,7 +125,6 @@ window.GuacInterop = {
             // 8. Client error handler
             this.client.onerror = (error) => {
                 console.error('❌ Client Hatası:', error);
-
                 displayElement.innerHTML = `
                     <div class="alert alert-danger m-3">
                         <h5>❌ RDP Client Hatası</h5>
@@ -217,7 +161,7 @@ window.GuacInterop = {
                 };
             console.log('✅ Touch aktif');
 
-            // 12. ✅ BAĞLAN - Parametreleri string olarak gönder
+            // 12. BAĞLAN
             const width = Math.floor(displayElement.clientWidth) || 1920;
             const height = Math.floor(displayElement.clientHeight) || 1080;
 
@@ -249,8 +193,99 @@ window.GuacInterop = {
         }
     },
 
+    // ✅ FULL-SCREEN FONKSIYONU
+    enterFullScreen: function (displayElement) {
+        console.log('🖥️ Full-screen modu başlatılıyor...');
+
+        // Full-screen API kontrolü
+        if (!displayElement.requestFullscreen) {
+            console.warn('⚠️ Bu tarayıcı Full-screen API desteklemiyor, responsive mode kullanılıyor');
+            this.applyResponsiveScale(displayElement);
+            return;
+        }
+
+        displayElement.requestFullscreen()
+            .then(() => {
+                console.log('✅ Full-screen modu aktif!');
+
+                // Full-screen'de görüntüyü optimize et
+                setTimeout(() => {
+                    if (document.fullscreenElement && this.client) {
+                        const display = this.client.getDisplay();
+
+                        // Ekran boyutlarını al
+                        const screenW = screen.width;
+                        const screenH = screen.height;
+                        const displayW = display.getWidth();
+                        const displayH = display.getHeight();
+
+                        console.log('📐 Ekran boyutu:', screenW, 'x', screenH);
+                        console.log('📐 RDP boyutu:', displayW, 'x', displayH);
+
+                        // Scale hesapla (aspect ratio korunarak)
+                        const scale = Math.min(
+                            screenW / displayW,
+                            screenH / displayH
+                        );
+
+                        display.scale(scale);
+                        console.log('📏 Full-screen scale uygulandı:', scale.toFixed(2));
+                    }
+                }, 300);
+
+            })
+            .catch((err) => {
+                console.warn('⚠️ Full-screen reddedildi:', err.message);
+                console.log('📱 Fallback: Responsive mode kullanılıyor');
+
+                // Tarayıcı full-screen'i engellediyse, responsive mode kullan
+                this.applyResponsiveScale(displayElement);
+            });
+
+        // ESC tuşu ile çıkış bildirimi
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement) {
+                console.log('🔙 Full-screen modundan çıkıldı');
+
+                // Normal responsive mode'a geri dön
+                if (this.client) {
+                    setTimeout(() => {
+                        this.applyResponsiveScale(displayElement);
+                    }, 100);
+                }
+            }
+        }, { once: true });
+    },
+
+    // ✅ RESPONSIVE SCALE (Full-screen olmadan)
+    applyResponsiveScale: function (displayElement) {
+        if (!this.client) return;
+
+        const display = this.client.getDisplay();
+        const containerW = displayElement.clientWidth;
+        const containerH = displayElement.clientHeight;
+        const displayW = display.getWidth();
+        const displayH = display.getHeight();
+
+        if (displayW > 0 && displayH > 0) {
+            const scale = Math.min(
+                containerW / displayW,
+                containerH / displayH
+            );
+
+            display.scale(scale);
+            console.log('📏 Responsive scale uygulandı:', scale.toFixed(2));
+        }
+    },
+
+    // ✅ BAĞLANTIYI KES
     disconnect: function () {
         console.log('🔌 Disconnecting...');
+
+        // Full-screen'den çık
+        if (document.fullscreenElement) {
+            document.exitFullscreen().catch(err => console.warn('Exit fullscreen error:', err));
+        }
 
         if (this.client) {
             try {

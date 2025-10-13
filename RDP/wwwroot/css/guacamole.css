@@ -7,28 +7,46 @@
     cursor: none; /* RDP cursor'ını göster */
 }
 
-    #guacamole-display > canvas {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100% !important;
-        height: 100% !important;
-        object-fit: contain;
+    #guacamole-display > canvas,
+    #guacamole-display > .guac-display {
+        position: absolute !important;
+        left: 50% !important;
+        top: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        max-width: 100% !important;
+        max-height: 100% !important;
+        object-fit: contain !important;
         image-rendering: optimizeSpeed;
         image-rendering: -webkit-optimize-contrast;
         image-rendering: optimize-contrast;
         -ms-interpolation-mode: nearest-neighbor;
     }
 
-    /* Guacamole layer'ları */
-    #guacamole-display .guac-display {
-        position: absolute;
-        left: 0;
-        top: 0;
+    /* Full-screen modunda */
+    #guacamole-display:fullscreen {
+        width: 100vw !important;
+        height: 100vh !important;
+        border: none !important;
     }
 
-    /* Guacamole varsayılan cursor'u gizle */
+        #guacamole-display:fullscreen > canvas,
+        #guacamole-display:fullscreen > .guac-display {
+            width: 100vw !important;
+            height: 100vh !important;
+        }
+
+    /* Guacamole cursor */
     #guacamole-display .guac-cursor {
         position: absolute;
         z-index: 1000;
+        pointer-events: none;
+    }
+
+    /* Loading overlay */
+    #guacamole-display .text-white {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 999;
     }
