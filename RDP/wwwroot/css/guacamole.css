@@ -1,0 +1,33 @@
+﻿/* wwwroot/css/guacamole.css */
+
+#guacamole-display {
+    position: relative;
+    overflow: hidden;
+    background: #000;
+}
+
+    #guacamole-display canvas {
+        display: block;
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        cursor: none; /* RDP'deki cursor'ı göster */
+    }
+
+    #guacamole-display .guac-display {
+        position: absolute;
+        left: 0;
+        top: 0;
+    }
+
+    /* Loading overlay */
+    #guacamole-display .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 1000;
+    }

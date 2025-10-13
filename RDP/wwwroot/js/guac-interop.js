@@ -131,12 +131,23 @@ window.GuacInterop = {
             // 5. Guacamole Client oluştur
             this.client = new Guacamole.Client(tunnel);
 
-            // 6. Display (Canvas) ekle
-            const canvas = this.client.getDisplay().getElement();
+            // 6. Display (Canvas) ekle ve boyutlandır
+            const display = this.client.getDisplay();
+            const canvas = display.getElement();
+
+            // Canvas boyutunu container'a göre ayarla
             canvas.style.width = '100%';
             canvas.style.height = '100%';
+            canvas.style.display = 'block';
+
             displayElement.appendChild(canvas);
             console.log('✅ Canvas eklendi');
+            console.log('📐 Canvas boyut:', canvas.width, 'x', canvas.height);
+            console.log('📐 Display element boyut:', displayElement.clientWidth, 'x', displayElement.clientHeight);
+
+            // Display scale'i ayarla (önemli!)
+            display.scale(1.0);
+            console.log('📏 Display scale ayarlandı: 1.0');
 
             // 7. Client state tracking
             this.client.onstatechange = (state) => {
