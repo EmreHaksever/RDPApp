@@ -21,8 +21,8 @@ namespace RDPApp.Controllers
     public class RDPController : ControllerBase
     {
         private readonly GuacamoleService _guacamoleService;
-        private const string GuacAdminUser = "guacadmin";
-        private const string GuacAdminPass = "guacadmin";
+        private const string GuacAdminUser = "emre";
+        private const string GuacAdminPass = "emre";
 
         public RDPController(GuacamoleService guacamoleService)
         {

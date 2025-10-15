@@ -1,6 +1,6 @@
 var builder = WebApplication.CreateBuilder(args);
 var BlazorAppBaseUrl = builder.Configuration["ASPNETCORE_URLS"]?.Split(';').FirstOrDefault()
-                       ?? "https://localhost:7156"; // Eðer ayar yoksa varsayýlaný kullan
+                       ?? "https://localhost:7156";
 
 
 builder.Services.AddRazorPages();
