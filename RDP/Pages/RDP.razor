@@ -3,19 +3,19 @@
 @inject IJSRuntime JSRuntime
 @using System.Net.Http.Json
 
-<h3>RDP Bağlantısı</h3>
+<h3>RDP Bağlantı Yönetimi</h3>
 
 <div class="card p-3 mb-4 shadow">
-    <h4 class="mb-3">Bağlantı Bilgileri</h4>
+    <h4 class="mb-3">Yeni Bağlantı Oluştur</h4>
 
     <div class="form-group">
         <label>RDP Host:</label>
-        <input class="form-control" @bind="Host" placeholder="192.168.1.100" />
+        <input class="form-control" @bind="Host" placeholder="192.168.1.1" />
     </div>
 
     <div class="form-group mt-2">
         <label>Kullanıcı Adı:</label>
-        <input class="form-control" @bind="Username" placeholder="Administrator" />
+        <input class="form-control" @bind="Username" placeholder="User" />
     </div>
 
     <div class="form-group mt-2">
@@ -23,21 +23,51 @@
         <input class="form-control" type="password" @bind="Password" />
     </div>
 
-    <button class="btn btn-primary mt-3" @onclick="ConnectRDP" disabled="@IsConnecting">
+    <button class="btn btn-primary mt-3" @onclick="CreateGuacConnection" disabled="@IsConnecting">
         @if (IsConnecting)
         {
             <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
         }
-        RDP Oturumunu Başlat
+        Bağlantı Oluştur (Token Al)
     </button>
-
-    @if (ConnectionStarted)
-    {
-        <button class="btn btn-danger mt-3 ms-2" @onclick="DisconnectRDP">
-            Bağlantıyı Kes
-        </button>
-    }
 </div>
+
+@if (AvailableConnections.Count > 0)
+{
+    <div class="card p-3 mb-4 shadow">
+        <h4 class="mb-3">Mevcut Bağlantılar</h4>
+
+        <ul class="list-group">
+            @foreach (var connection in AvailableConnections)
+            {
+                <li class="list-group-item d-flex justify-content-between align-items-center
+                                    @(connection == ActiveSession ? "active" : "")">
+
+                    <div>
+                        <span class="fw-bold">@connection.DisplayName</span>
+                        @if (connection == ActiveSession)
+                        {
+                            <span class="badge bg-success ms-2">AKTİF</span>
+                        }
+                    </div>
+
+                    @if (connection != ActiveSession)
+                    {
+                        <button class="btn btn-sm btn-success" @onclick="() => StartRDP(connection)">
+                            RDP Başlat
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-sm btn-danger" @onclick="DisconnectRDP">
+                            Bağlantıyı Kes
+                        </button>
+                    }
+                </li>
+            }
+        </ul>
+    </div>
+}
 
 @if (!string.IsNullOrEmpty(ErrorMessage))
 {
@@ -55,44 +85,81 @@
     </div>
 }
 
-@if (ConnectionStarted)
+@if (ActiveSession != null)
 {
     <div class="card mt-4 shadow">
-        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <div class="card-header bg-primary text-white d-flex justify-content-between
+                 align-items-center">
             <h5 class="mb-0">🖥️ Uzaktan Masaüstü</h5>
-            <small class="text-white-50">Connection ID: @sessionInfo?.ConnectionId</small>
+            <small class="text-white-50">Connection ID: @ActiveSession.ConnectionId</small>
         </div>
         <div class="card-body p-0" style="background: #000;">
-            <div id="guacamole-display" 
-                 style="width: 100%; 
-                        height: 700px; 
-                        background: #000; 
-                        position: relative;
-                        overflow: hidden;">
+            <div id="guacamole-display"
+                 style="width: 100%;
+                            height: 700px;
+                            background: #000;
+                            position: relative;
+                            overflow: hidden;">
             </div>
         </div>
     </div>
 }
 
 @code {
-    // Ekleme: Session bilgisini saklayalım
-    private GuacSessionInfo? sessionInfo;
+    // Session bilgisini tutan model (mevcut)
+    public record GuacSessionInfo(string AuthToken, string ConnectionId);
 
-@code {
+    // Yeni model: Frontend'de tutulacak bağlantı bilgileri
+    // Yeni model: Frontend'de tutulacak bağlantı bilgileri
+    public record StoredConnection(string Host, string Username, string AuthToken, string ConnectionId)
+    {
+        // Bağlantı ID'sinin ilk 4 karakterini (güvenli bir şekilde) gösteren yardımcı özellik
+        public string DisplayName
+        {
+            get
+            {
+                // Bağlantı ID'si null veya boşsa, ID'yi gösterme
+                if (string.IsNullOrEmpty(ConnectionId))
+                {
+                    return $"{Username}@{Host} (ID: N/A)";
+                }
+
+                // ID'nin ilk 4 karakterini al, ID 4 karakterden kısaysa tümünü al.
+                var shortId = ConnectionId.Length >= 4 ? ConnectionId.Substring(0, 4) : ConnectionId;
+
+                return $"{Username}@{Host} (ID: {shortId})";
+            }
+        }
+    }
+    // Connection ID'nin ilk 4 karakterini gösteren yardımcı özellik
+        
+
+    // Aktif RDP oturumu bilgisi (Başlatılmış ve ekranda görünen)
+    private StoredConnection? ActiveSession = null;
+
+    // Oluşturulmuş ama henüz başlatılmamış bağlantıların listesi
+    private List<StoredConnection> AvailableConnections = new();
+
     private string Host { get; set; } = "192.168.1.1";
     private string Username { get; set; } = "User";
     private string Password { get; set; } = "Pass123";
 
     private bool IsConnecting = false;
-    private bool ConnectionStarted = false;
     private string ErrorMessage = "";
     private string DebugInfo = "";
 
-    private async Task ConnectRDP()
+    // Bağlantı Oluştur (eski ConnectRDP)
+    private async Task CreateGuacConnection()
     {
         IsConnecting = true;
         ErrorMessage = "";
         DebugInfo = "";
+
+        // Bağlantı oluşturulmadan önce aktif oturumu kapat
+        if (ActiveSession != null)
+        {
+            await DisconnectRDP();
+        }
 
         try
         {
@@ -111,43 +178,26 @@
             }
 
             // 2. Token ve Connection ID al
-            var sessionInfo = await response.Content.ReadFromJsonAsync<GuacSessionInfo>();
-
-            if (sessionInfo == null || string.IsNullOrEmpty(sessionInfo.AuthToken))
+            var newSessionInfo = await response.Content.ReadFromJsonAsync<GuacSessionInfo>();
+            if (newSessionInfo == null || string.IsNullOrEmpty(newSessionInfo.AuthToken))
             {
                 ErrorMessage = "Sunucudan geçersiz yanıt alındı";
                 return;
             }
 
-            DebugInfo = $"✅ Token: {sessionInfo.AuthToken[..20]}...\n" +
-                       $"✅ Connection ID: {sessionInfo.ConnectionId}";
+            // 3. Bağlantıyı listeye ekle
+            var newConnection = new StoredConnection(Host, Username, newSessionInfo.AuthToken, newSessionInfo.ConnectionId);
+            AvailableConnections.Add(newConnection);
 
-            // 3. UI'yi güncelle ve DOM render bekle
-            ConnectionStarted = true;
-            StateHasChanged();
-            await Task.Delay(100); // DOM'un render olmasını bekle
-
-            // 4. ✅ JavaScript'e token ve connection ID gönder
-            // JavaScript tarafında tunnel ID REST API ile alınacak
-            await JSRuntime.InvokeVoidAsync(
-                "GuacInterop.startClient",
-                sessionInfo.AuthToken,        // 1. parametre: authToken
-                sessionInfo.ConnectionId,     // 2. parametre: connectionId  
-                "guacamole-display"          // 3. parametre: displayElementId
-            );
-
-            Console.WriteLine("✅ Guacamole başlatıldı");
-            
-            DebugInfo += $"\n\n✅ JavaScript'e gönderildi:\n" +
-                        $"• Token: {sessionInfo.AuthToken[..20]}...\n" +
-                        $"• Connection ID: {sessionInfo.ConnectionId}\n" +
-                        $"• Display Element: guacamole-display\n" +
-                        $"• Tunnel ID JavaScript tarafında alınacak";
+            DebugInfo = $"✅ Yeni Bağlantı Oluşturuldu:\n" +
+                        $"• Host: {newConnection.Host}\n" +
+                        $"• Connection ID: {newConnection.ConnectionId}\n" +
+                        $"• Artık 'Mevcut Bağlantılar' listesinden başlatılabilir.";
         }
         catch (Exception ex)
         {
             ErrorMessage = $"Hata: {ex.Message}\n{ex.StackTrace}";
-            Console.WriteLine($"❌ ConnectRDP Error: {ex}");
+            Console.WriteLine($"❌ CreateGuacConnection Error: {ex}");
         }
         finally
         {
@@ -155,12 +205,47 @@
         }
     }
 
+    // RDP Oturumunu Başlat
+    private async Task StartRDP(StoredConnection connection)
+    {
+        // Eğer zaten aktif bir oturum varsa, önce onu kapat
+        if (ActiveSession != null && ActiveSession != connection)
+        {
+            await DisconnectRDP();
+        }
+
+        ActiveSession = connection;
+
+        DebugInfo = $"✅ Token: {connection.AuthToken[..20]}...\n" +
+                    $"✅ Connection ID: {connection.ConnectionId}";
+
+        // UI'yi güncelle ve DOM render bekle
+        StateHasChanged();
+        await Task.Delay(100); // DOM'un render olmasını bekle
+
+        // JavaScript'e token ve connection ID gönder
+        await JSRuntime.InvokeVoidAsync(
+            "GuacInterop.startClient",
+            connection.AuthToken,
+            connection.ConnectionId,
+            "guacamole-display"
+        );
+        Console.WriteLine("✅ Guacamole başlatıldı");
+
+        DebugInfo += $"\n\n✅ JavaScript'e gönderildi:\n" +
+                    $"• Token: {connection.AuthToken[..20]}...\n" +
+                    $"• Connection ID: {connection.ConnectionId}\n" +
+                    $"• Display Element: guacamole-display\n" +
+                    $"• Tunnel ID JavaScript tarafında alınacak";
+    }
+
+    // Mevcut RDP oturumunu kes
     private async Task DisconnectRDP()
     {
         try
         {
             await JSRuntime.InvokeVoidAsync("GuacInterop.disconnect");
-            ConnectionStarted = false;
+            ActiveSession = null;
             DebugInfo = "";
         }
         catch (Exception ex)
@@ -168,7 +253,4 @@
             Console.WriteLine($"Disconnect error: {ex.Message}");
         }
     }
-
-    // Model
-    public record GuacSessionInfo(string AuthToken, string ConnectionId);
-}}
+}
