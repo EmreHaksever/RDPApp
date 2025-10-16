@@ -127,7 +127,7 @@
                 // ID'nin ilk 4 karakterini al, ID 4 karakterden kısaysa tümünü al.
                 var shortId = ConnectionId.Length >= 4 ? ConnectionId.Substring(0, 4) : ConnectionId;
 
-                return $"{Username}@{Host} (ID: {shortId})";
+                return $"{Username}";
             }
         }
     }
