@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using Microsoft.Extensions.Configuration; // Configuration için gerekli
 
 namespace RDPApp.Services
 {
@@ -22,42 +23,52 @@ namespace RDPApp.Services
 
     public class GuacamoleService
     {
-        private const string GuacApiBaseUrl = "http://localhost:8080/api/";
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IConfiguration _configuration; // Yapılandırma servisi
 
-        // Docker kurulumuna göre veri kaynağı 'mysql', 'postgresql' veya 'default' olabilir.
-        private const string DataSource = "mysql";
-
-        // =========================================================================
-        // YENİ EKLENEN KISIM: Master (Admin) Kullanıcı Bilgileri
-        // =========================================================================
-        // Buraya Guacamole'de yetkili olan (bağlantıları oluşturan) kullanıcının bilgilerini gir.
-        private const string MasterUser = "admin";
-        private const string MasterPass = "admin";
-
-        public GuacamoleService(IHttpClientFactory httpClientFactory)
+        public GuacamoleService(IHttpClientFactory httpClientFactory, IConfiguration configuration)
         {
             _httpClientFactory = httpClientFactory;
+            _configuration = configuration;
         }
+
+        // =========================================================================
+        // AYARLAR: Değerler artık appsettings.json veya User Secrets'tan okunuyor
+        // =========================================================================
+        private string ApiUrl => _configuration["Guacamole:ApiUrl"] ?? "http://localhost:8080/api/";
+
+        // DataSource ayarını da config'den okuyoruz, yoksa varsayılan 'mysql'
+        private string DataSource => _configuration["Guacamole:DataSource"] ?? "mysql";
+
+        private string MasterUser => _configuration["Guacamole:MasterUser"] ?? "admin";
+
+        // ŞİFRE ARTIK KODDA YOK! Güvenli alandan okunuyor.
+        private string MasterPass => _configuration["Guacamole:MasterPassword"];
 
         private HttpClient CreateGuacClient()
         {
             var client = _httpClientFactory.CreateClient("GuacamoleAPI");
-            client.BaseAddress = new Uri(GuacApiBaseUrl);
+            client.BaseAddress = new Uri(ApiUrl);
             return client;
         }
 
         // =========================================================================
-        // YENİ METOD: Master Token Alma
+        // Master Token Alma (Admin yetkisiyle)
         // =========================================================================
         public async Task<string?> GetMasterTokenAsync()
         {
+            // Şifre kontrolü
+            if (string.IsNullOrEmpty(MasterPass))
+            {
+                Console.WriteLine("KRİTİK HATA: Admin şifresi (Guacamole:MasterPassword) yapılandırmada bulunamadı!");
+                return null;
+            }
+
             // Her seferinde Admin adına taze bir token alır.
-            // Bu token sayesinde normal kullanıcılar da adminin oluşturduğu bağlantıları görebilir.
             return await GetAuthTokenAsync(MasterUser, MasterPass);
         }
 
-        // 1. Token Alma (Aynen Korundu)
+        // 1. Token Alma
         public async Task<string?> GetAuthTokenAsync(string username, string password)
         {
             var client = CreateGuacClient();
