@@ -1,6 +1,4 @@
-﻿//GuacamoleService.cs
-
-using System.Net.Http;
+﻿using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -9,14 +7,27 @@ using System.Collections.Generic;
 
 namespace RDPApp.Services
 {
+    // Login ve Bağlantı yanıtları için mevcut recordlar
     public record GuacLoginResponse(string authToken);
     public record GuacConnectionResponse(string identifier);
     public record GuacTunnelResponse(string tunnelId, string connectionId);
+
+    // YENİ: Bağlantı listesi için model
+    public class GuacConnectionDetail
+    {
+        public string Identifier { get; set; }
+        public string Name { get; set; }
+        public string Protocol { get; set; }
+    }
 
     public class GuacamoleService
     {
         private const string GuacApiBaseUrl = "http://localhost:8080/api/";
         private readonly IHttpClientFactory _httpClientFactory;
+
+        // Docker kurulumuna göre veri kaynağı 'mysql', 'postgresql' veya 'default' olabilir.
+        // Genelde Docker kurulumlarında 'mysql' veya 'postgresql' kullanılır.
+        private const string DataSource = "mysql";
 
         public GuacamoleService(IHttpClientFactory httpClientFactory)
         {
@@ -30,6 +41,7 @@ namespace RDPApp.Services
             return client;
         }
 
+        // 1. Token Alma (Aynen Korundu)
         public async Task<string?> GetAuthTokenAsync(string username, string password)
         {
             var client = CreateGuacClient();
@@ -59,29 +71,86 @@ namespace RDPApp.Services
             }
         }
 
+        // =========================================================================
+        // YENİ EKLENEN METOD: Kayıtlı Bağlantıları Listeleme
+        // =========================================================================
+        public async Task<List<GuacConnectionDetail>> GetConnectionsAsync(string authToken)
+        {
+            var client = CreateGuacClient();
+            // Guacamole API, bağlantıları bir Dictionary (Map) olarak döner.
+            var url = $"session/data/{DataSource}/connections?token={authToken}";
+
+            try
+            {
+                var response = await client.GetAsync(url);
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"Bağlantı Listesi Çekilemedi: {response.StatusCode}");
+                    return new List<GuacConnectionDetail>();
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+
+                // API Yanıtı şöyledir: { "1": { "name": "PC1", ... }, "2": { "name": "PC2"... } }
+                // Bu yüzden Dictionary<string, JsonElement> olarak parse ediyoruz.
+                var rawData = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json);
+
+                var connectionList = new List<GuacConnectionDetail>();
+
+                if (rawData != null)
+                {
+                    foreach (var item in rawData)
+                    {
+                        // item.Key = Connection ID (Örn: "3")
+                        // item.Value = Connection Detayları (Örn: { "name": "Muhasebe", "protocol": "rdp" ... })
+
+                        string protocol = "unknown";
+                        string name = "Bilinmeyen";
+
+                        if (item.Value.TryGetProperty("protocol", out var p)) protocol = p.GetString();
+                        if (item.Value.TryGetProperty("name", out var n)) name = n.GetString();
+
+                        // Sadece RDP olanları filtreleyelim (İsteğe bağlı, SSH vs. de varsa kaldırabilirsin)
+                        if (protocol == "rdp")
+                        {
+                            connectionList.Add(new GuacConnectionDetail
+                            {
+                                Identifier = item.Key, // Bu ID'yi connect metodunda kullanacağız
+                                Name = name,
+                                Protocol = protocol
+                            });
+                        }
+                    }
+                }
+                return connectionList;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Bağlantı Listesi Hatası: {ex.Message}");
+                return new List<GuacConnectionDetail>();
+            }
+        }
+
+        // =========================================================================
+        // ESKİ METOD (Korundu): Dinamik Bağlantı Oluşturma
+        // (Admin panelinde yeni makine eklemek istersen bunu kullanabilirsin)
+        // =========================================================================
         public async Task<string?> CreateConnectionAsync(string authToken, string host, string username, string password)
         {
             var client = CreateGuacClient();
 
-            // 1. RDP Bağlantı Parametreleri (Dictionary kullanılıyor)
             var parameters = new Dictionary<string, string>
             {
                 {"hostname", host},
                 {"port", "3389"},
                 {"username", username},
                 {"password", password},
-                
-                // KRİTİK ÇÖZÜM: Sertifika ve NLA Hatalarını Atlatma
                 {"ignore-cert", "true"},
                 {"security", "any"},
-                //{"disable-auth", "true"},
-                
-                // YENİ ÇÖZÜM: Bağlantı Zaman Aşımı Sürelerini Artırma (Saniye cinsinden)
-                {"timeout", "15000"}, // 15 saniye bağlantı kurma süresi
-                {"read-timeout", "20000"} // 20 saniye veri okuma süresi
+                {"timeout", "15000"},
+                {"read-timeout", "20000"}
             };
 
-            // 2. Zorunlu API Nesnesi (NPE hatalarını önler)
             var connectionData = new
             {
                 name = $"RemoteSession-{Guid.NewGuid().ToString().Substring(0, 4)}",
@@ -95,7 +164,7 @@ namespace RDPApp.Services
             var json = JsonSerializer.Serialize(connectionData);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var url = $"session/data/mysql/connections?token={authToken}";
+            var url = $"session/data/{DataSource}/connections?token={authToken}";
 
             try
             {
@@ -125,7 +194,7 @@ namespace RDPApp.Services
         {
             var client = CreateGuacClient();
 
-            var url = $"session/data/mysql/connections/{connectionId}/tunnels?token={authToken}";
+            var url = $"session/data/{DataSource}/connections/{connectionId}/tunnels?token={authToken}";
 
             try
             {
@@ -133,7 +202,6 @@ namespace RDPApp.Services
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    // Bağlantı başarılı olsa bile guacd ile RDP makinesi arasındaki sorun burada yakalanır.
                     string errorContent = await response.Content.ReadAsStringAsync();
                     Console.WriteLine($"Tünel Anahtarı Alma Başarısız: {response.StatusCode}");
                     Console.WriteLine($"Guacamole Hata Detayı: {errorContent}");

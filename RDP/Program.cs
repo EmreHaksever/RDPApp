@@ -10,6 +10,8 @@ builder.Services.AddHttpClient("GuacamoleAPI");
 
 builder.Services.AddScoped<RDPApp.Services.GuacamoleService>();
 
+builder.Services.AddScoped<RDPApp.Services.UserSession>();
+
 builder.Services.AddScoped(sp => new HttpClient
 {
     // Blazor uygulamasýnýn kendisinin base adresini atýyoruz

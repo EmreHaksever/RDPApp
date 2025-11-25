@@ -1,0 +1,69 @@
+﻿@page "/"
+@page "/login"
+@inject NavigationManager NavManager
+@inject RDPApp.Services.GuacamoleService GuacService
+@inject RDPApp.Services.UserSession UserSession
+
+<div class="d-flex justify-content-center align-items-center vh-100 bg-light">
+    <div class="card shadow p-4" style="width: 400px;">
+        <div class="text-center mb-4">
+            <h2 class="text-primary">Giriş Yap</h2>
+            <p class="text-muted">Kurumsal RDP Sistemi</p>
+        </div>
+
+        @if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            <div class="alert alert-danger">@ErrorMessage</div>
+        }
+
+        <div class="mb-3">
+            <label>Kullanıcı Adı</label>
+            <input class="form-control" @bind="Username" placeholder="Kullanıcı adınız" />
+        </div>
+
+        <div class="mb-3">
+            <label>Şifre</label>
+            <input type="password" class="form-control" @bind="Password" placeholder="Şifreniz" />
+        </div>
+
+        <button class="btn btn-primary w-100" @onclick="HandleLogin" disabled="@IsLoading">
+            @if (IsLoading)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+            }
+            Giriş Yap
+        </button>
+    </div>
+</div>
+
+@code {
+    private string Username;
+    private string Password;
+    private string ErrorMessage;
+    private bool IsLoading = false;
+
+    private async Task HandleLogin()
+    {
+        IsLoading = true;
+        ErrorMessage = "";
+
+        // 1. Guacamole'ye bu bilgilerle giriş yapmayı dene
+        var token = await GuacService.GetAuthTokenAsync(Username, Password);
+
+        if (!string.IsNullOrEmpty(token))
+        {
+            // 2. Başarılıysa oturum bilgilerini kaydet
+            UserSession.AuthToken = token;
+            UserSession.Username = Username;
+
+            // 3. RDP sayfasına yönlendir
+            NavManager.NavigateTo("/rdp");
+        }
+        else
+        {
+            ErrorMessage = "Kullanıcı adı veya şifre hatalı.";
+        }
+
+        IsLoading = false;
+    }
+}
