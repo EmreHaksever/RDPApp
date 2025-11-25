@@ -6,89 +6,116 @@
 
 <div class="container-fluid h-100 d-flex flex-column">
 
-    <div class="row bg-primary text-white p-2 align-items-center shadow-sm" style="flex: 0 0 auto;">
+    <div class="row bg-primary text-white p-3 align-items-center shadow" style="flex: 0 0 auto;">
         <div class="col">
-            <h5 class="m-0">RDP Yönetim Paneli</h5>
+            <h4 class="m-0 fw-bold"><span class="oi oi-monitor me-2"></span>RDP Yönetim Paneli</h4>
         </div>
         <div class="col-auto d-flex align-items-center">
-            <span class="me-3">
-                <span class="oi oi-person me-1"></span> @UserSession.Username
-                @(UserSession.IsAdmin ? "(Yönetici)" : "(Kullanıcı)")
-            </span>
-            <button class="btn btn-sm btn-light text-primary" @onclick="Logout">Çıkış Yap</button>
+            <div class="bg-white bg-opacity-25 rounded px-3 py-2 me-2">
+                <span class="oi oi-person me-2"></span>
+                <strong>@UserSession.Username</strong>
+                <span class="badge bg-light text-primary ms-2">@(UserSession.IsAdmin ? "Yönetici" : "Kullanıcı")</span>
+            </div>
+            <button class="btn btn-light" @onclick="Logout">
+                <span class="oi oi-account-logout me-1"></span> Çıkış
+            </button>
         </div>
     </div>
 
-    <div class="row flex-grow-1" style="overflow: hidden;">
+    <div class="row flex-grow-1" style="overflow: hidden; min-height: 0;">
 
-        <div class="col-md-3 bg-light border-end d-flex flex-column p-0" style="overflow-y: auto;">
+        <div class="col-md-3 bg-light border-end d-flex flex-column p-0" style="overflow-y: auto; max-height: 100%;">
 
             @if (UserSession.IsAdmin)
             {
-                <div class="p-3 border-bottom bg-white">
-                    <h6 class="text-primary mb-3"><span class="oi oi-plus me-1"></span>Yeni Bağlantı Oluştur</h6>
+                <div class="p-4 border-bottom bg-white shadow-sm">
+                    <h6 class="text-primary mb-3 fw-bold">
+                        <span class="oi oi-plus me-2"></span>Yeni Bağlantı
+                    </h6>
 
-                    <div class="mb-2">
-                        <label class="form-label small text-muted mb-0">Bağlantı Adı</label>
-                        <input class="form-control form-control-sm" @bind="NewConnectionName" placeholder="Örn: Muhasebe PC" />
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Bağlantı Adı</label>
+                        <input class="form-control" @bind="NewConnectionName" placeholder="Örn: Muhasebe PC" />
                     </div>
-                    <div class="mb-2">
-                        <label class="form-label small text-muted mb-0">IP Adresi</label>
-                        <input class="form-control form-control-sm" @bind="NewHost" placeholder="192.168.1.X" />
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">IP Adresi</label>
+                        <input class="form-control" @bind="NewHost" placeholder="192.168.1.X" />
                     </div>
-                    <div class="mb-2">
-                        <label class="form-label small text-muted mb-0">Kullanıcı Adı</label>
-                        <input class="form-control form-control-sm" @bind="NewUser" placeholder="PC Kullanıcı Adı" />
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Kullanıcı Adı</label>
+                        <input class="form-control" @bind="NewUser" placeholder="PC Kullanıcı Adı" />
                     </div>
-                    <div class="mb-2">
-                        <label class="form-label small text-muted mb-0">Şifre</label>
-                        <input type="password" class="form-control form-control-sm" @bind="NewPass" placeholder="PC Şifresi" />
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Şifre</label>
+                        <input type="password" class="form-control" @bind="NewPass" placeholder="PC Şifresi" />
                     </div>
 
-                    <button class="btn btn-sm btn-outline-primary w-100 mt-2" @onclick="CreateConnection" disabled="@IsCreating">
+                    <button class="btn btn-primary w-100" @onclick="CreateConnection" disabled="@IsCreating">
+                        <span class="oi oi-@(IsCreating ? "loop-circular" : "check") me-2"></span>
                         @(IsCreating ? "Oluşturuluyor..." : "Bağlantı Oluştur")
                     </button>
 
                     @if (!string.IsNullOrEmpty(CreateMessage))
                     {
-                        <div class="alert alert-info mt-2 p-1 small">@CreateMessage</div>
+                        <div class="alert alert-success mt-3 mb-0 py-2">
+                            <span class="oi oi-check me-2"></span>@CreateMessage
+                        </div>
                     }
                 </div>
             }
 
-            <div class="p-3 flex-grow-1">
-                <h6 class="text-secondary mb-3"><span class="oi oi-list me-1"></span>Erişilebilir Bilgisayarlar</h6>
+            <div class="p-4 flex-grow-1">
+                <h6 class="text-secondary mb-3 fw-bold">
+                    <span class="oi oi-list me-2"></span>Bilgisayarlar
+                </h6>
 
                 @if (AvailableConnections == null)
                 {
-                    <p class="text-muted small">Yükleniyor...</p>
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary mb-2" role="status">
+                            <span class="visually-hidden">Yükleniyor...</span>
+                        </div>
+                        <p class="text-muted small mb-0">Yükleniyor...</p>
+                    </div>
                 }
                 else if (AvailableConnections.Count == 0)
                 {
-                    <div class="alert alert-warning small">Listenizde bilgisayar yok.</div>
+                    <div class="text-center py-5">
+                        <span class="oi oi-info text-muted" style="font-size: 2rem;"></span>
+                        <p class="text-muted mt-3 mb-0">Henüz bilgisayar eklenmemiş.</p>
+                    </div>
                 }
                 else
                 {
                     <div class="list-group">
                         @foreach (var conn in AvailableConnections)
                         {
-                            <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center p-0 @(ActiveConnectionId == conn.Identifier ? "border-primary" : "")">
-
-                                <button type="button" class="btn btn-link text-decoration-none text-dark text-start flex-grow-1 p-3"
-                                        @onclick="() => ConnectToSession(conn)">
-                                    <span class="fw-bold">@conn.Name</span>
-                                    @if (ActiveConnectionId == conn.Identifier)
-                                    {
-                                        <span class="badge bg-primary ms-2">Aktif</span>
-                                    }
-                                </button>
-
-                                @if (UserSession.IsAdmin)
-                                {
-                                    <button class="btn btn-link text-danger p-3" @onclick="() => DeleteConnection(conn)" title="Bu bağlantıyı sil">
-                                        <span class="oi oi-trash"></span>
+                            <div class="list-group-item list-group-item-action border rounded mb-2 p-0 @(ActiveConnectionId == conn.Identifier ? "border-primary border-2 bg-primary bg-opacity-10" : "")">
+                                <div class="d-flex align-items-center">
+                                    <button type="button"
+                                            class="btn btn-link text-decoration-none text-dark text-start flex-grow-1 p-3 d-flex align-items-center"
+                                            @onclick="() => ConnectToSession(conn)">
+                                        <span class="oi oi-laptop me-3 text-primary"></span>
+                                        <div>
+                                            <div class="fw-bold">@conn.Name</div>
+                                            @if (ActiveConnectionId == conn.Identifier)
+                                            {
+                                                <small class="text-success">
+                                                    <span class="oi oi-media-record me-1"></span>Bağlı
+                                                </small>
+                                            }
+                                        </div>
                                     </button>
-                                }
+
+                                    @if (UserSession.IsAdmin)
+                                    {
+                                        <button class="btn btn-link text-danger p-3"
+                                                @onclick="() => DeleteConnection(conn)"
+                                                title="Sil">
+                                            <span class="oi oi-trash"></span>
+                                        </button>
+                                    }
+                                </div>
                             </div>
                         }
                     </div>
@@ -96,37 +123,46 @@
             </div>
         </div>
 
-        <div class="col-md-9 p-0 bg-dark position-relative d-flex flex-column">
+        <div class="col-md-9 p-0 bg-dark position-relative d-flex flex-column" style="min-height: 0; overflow: hidden;">
 
             @if (!string.IsNullOrEmpty(ActiveConnectionId))
             {
-                <div class="bg-secondary text-white p-2 d-flex justify-content-between align-items-center" style="flex: 0 0 auto; z-index: 100;">
-                    <span class="small ms-2"><span class="oi oi-monitor me-1"></span>Aktif Oturum</span>
+                <div class="bg-dark bg-gradient text-white p-3 d-flex justify-content-between align-items-center border-bottom border-secondary"
+                     style="flex: 0 0 auto; z-index: 100;">
+                    <div class="d-flex align-items-center">
+                        <span class="badge bg-success me-2">
+                            <span class="oi oi-media-record"></span>
+                        </span>
+                        <span class="fw-semibold">Aktif Oturum</span>
+                    </div>
 
-                    <div>
-                        <button class="btn btn-sm btn-light me-2" @onclick="TriggerFullScreen" title="Tekrar Tam Ekran Yap">
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-light" @onclick="TriggerFullScreen">
                             <span class="oi oi-fullscreen-enter me-1"></span> Tam Ekran
                         </button>
 
-                        <button class="btn btn-sm btn-danger me-2" @onclick="DisconnectSession">
+                        <button class="btn btn-sm btn-danger" @onclick="DisconnectSession">
                             <span class="oi oi-power-standby me-1"></span> Bağlantıyı Kes
                         </button>
                     </div>
                 </div>
             }
 
-            <div style="flex-grow: 1; position: relative; overflow: hidden;">
+            <div style="flex-grow: 1; position: relative; overflow: hidden; min-height: 0;">
                 @if (string.IsNullOrEmpty(ActiveConnectionId))
                 {
-                    <div class="d-flex justify-content-center align-items-center h-100 text-white-50">
+                    <div class="d-flex justify-content-center align-items-center text-white-50" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 10;">
                         <div class="text-center">
-                            <h1 class="display-1"><span class="oi oi-monitor"></span></h1>
-                            <p>Bağlanmak için soldan bir bilgisayar seçin.</p>
+                            <div class="mb-4">
+                                <span class="oi oi-monitor" style="font-size: 5rem; opacity: 0.3;"></span>
+                            </div>
+                            <h5 class="mb-3">Bağlantı Bekleniyor</h5>
+                            <p class="text-white-50">Bağlanmak için soldan bir bilgisayar seçin</p>
                         </div>
                     </div>
                 }
 
-                <div id="guacamole-display" style="width: 100%; height: 100%;"></div>
+                <div id="guacamole-display" style="width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></div>
             </div>
         </div>
     </div>
