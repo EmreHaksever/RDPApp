@@ -46,7 +46,7 @@
                     </div>
 
                     <button class="btn btn-sm btn-outline-primary w-100 mt-2" @onclick="CreateConnection" disabled="@IsCreating">
-                        @(IsCreating ? "Oluşturuluyor..." : "Bağlantıyı Kaydet")
+                        @(IsCreating ? "Oluşturuluyor..." : "Bağlantı Oluştur")
                     </button>
 
                     @if (!string.IsNullOrEmpty(CreateMessage))
@@ -100,11 +100,18 @@
 
             @if (!string.IsNullOrEmpty(ActiveConnectionId))
             {
-                <div class="bg-secondary text-white p-2 d-flex justify-content-between align-items-center" style="flex: 0 0 auto;">
+                <div class="bg-secondary text-white p-2 d-flex justify-content-between align-items-center" style="flex: 0 0 auto; z-index: 100;">
                     <span class="small ms-2"><span class="oi oi-monitor me-1"></span>Aktif Oturum</span>
-                    <button class="btn btn-sm btn-danger me-2" @onclick="DisconnectSession">
-                        <span class="oi oi-power-standby me-1"></span> Bağlantıyı Kes
-                    </button>
+
+                    <div>
+                        <button class="btn btn-sm btn-light me-2" @onclick="TriggerFullScreen" title="Tekrar Tam Ekran Yap">
+                            <span class="oi oi-fullscreen-enter me-1"></span> Tam Ekran
+                        </button>
+
+                        <button class="btn btn-sm btn-danger me-2" @onclick="DisconnectSession">
+                            <span class="oi oi-power-standby me-1"></span> Bağlantıyı Kes
+                        </button>
+                    </div>
                 </div>
             }
 
@@ -180,15 +187,13 @@
         IsCreating = false;
     }
 
-    // Admin: Bağlantı Silme (YENİ)
+    // Admin: Bağlantı Silme
     private async Task DeleteConnection(RDPApp.Services.GuacConnectionDetail conn)
     {
-        // Basit bir JavaScript onayı alabiliriz (Opsiyonel ama önerilir)
         bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"'{conn.Name}' bağlantısını silmek istediğinize emin misiniz?");
 
         if (confirmed)
         {
-            // Eğer silinen bağlantı şu an açıksa, önce onu kapatalım
             if (ActiveConnectionId == conn.Identifier)
             {
                 await DisconnectSession();
@@ -197,11 +202,10 @@
             bool success = await GuacService.DeleteConnectionAsync(UserSession.AuthToken, conn.Identifier);
             if (success)
             {
-                await LoadConnections(); // Listeyi güncelle
+                await LoadConnections();
             }
             else
             {
-                // Hata mesajı gösterebilirsin
                 await JSRuntime.InvokeVoidAsync("alert", "Silme işlemi başarısız oldu.");
             }
         }
@@ -212,7 +216,7 @@
     {
         if (ActiveConnectionId == conn.Identifier) return;
 
-        await DisconnectSession(); // Temiz bir başlangıç için önce kes
+        await DisconnectSession();
 
         ActiveConnectionId = conn.Identifier;
 
@@ -224,15 +228,18 @@
         );
     }
 
-    // Bağlantıyı Kesme (YENİ)
+    // GÜNCELLEME: Tam Ekran Tetikleyici Metodu Eklendi
+    private async Task TriggerFullScreen()
+    {
+        await JSRuntime.InvokeVoidAsync("GuacInterop.enterFullScreen");
+    }
+
+    // Bağlantıyı Kesme
     private async Task DisconnectSession()
     {
         if (!string.IsNullOrEmpty(ActiveConnectionId))
         {
-            // 1. JS tarafında bağlantıyı kopar ve ekranı temizle
             await JSRuntime.InvokeVoidAsync("GuacInterop.disconnect");
-
-            // 2. UI durumunu güncelle (Aktif bağlantı yok)
             ActiveConnectionId = null;
         }
     }

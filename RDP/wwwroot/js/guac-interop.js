@@ -1,102 +1,81 @@
-﻿// wwwroot/js/guac-interop.js - DÜZELTİLMİŞ FULL-SCREEN VERSİYONU
+﻿// wwwroot/js/guac-interop.js - FİNAL SÜRÜM (Auto-Fit + Tam Ekran Butonu Destekli)
 
 window.GuacInterop = {
     client: null,
     keyboard: null,
     mouse: null,
     touch: null,
+    displayElement: null,
+    resizeTimeout: null,
 
     // 1. Client Başlatma
     startClient: function (authToken, connectionId, displayElementId) {
         console.log('🚀 Guacamole başlatılıyor...');
-        console.log('📌 Token:', authToken?.substring(0, 20) + '...');
-        console.log('📌 Connection ID:', connectionId);
 
-        // Guacamole kütüphanesi kontrolü
-        if (typeof Guacamole === 'undefined') {
-            console.error("❌ Guacamole JS kütüphanesi yüklenemedi!");
-            alert('Guacamole kütüphanesi yüklenemedi! guacamole-common.js dosyasını kontrol edin.');
-            return;
-        }
-
-        // Display elementini bul
-        const displayElement = document.getElementById(displayElementId);
-        if (!displayElement) {
+        // Elementi bul ve global değişkene ata
+        this.displayElement = document.getElementById(displayElementId);
+        if (!this.displayElement) {
             console.error(`❌ Display element bulunamadı: #${displayElementId}`);
             return;
         }
 
         // Önceki içeriği temizle
-        displayElement.innerHTML = "";
+        this.displayElement.innerHTML = "";
+
+        if (typeof Guacamole === 'undefined') {
+            alert('Hata: Guacamole JS kütüphanesi yüklenemedi.');
+            return;
+        }
 
         try {
-            // WebSocket Tunnel Endpoint (Dikkat: HTTPTunnel yerine WebSocketTunnel daha performanslıdır)
-            // Eğer docker ayarlarında ws:// kullanıyorsan burayı WebSocketTunnel yapmalısın.
-            // Kodunda HTTPTunnel vardı, aynen bırakıyorum ama performans için WebSocketTunnel önerilir.
-            // const tunnelUrl = "ws://localhost:8080/tunnel"; 
+            // Tunnel (SSL kullanıyorsan wss:// veya https:// yapmalısın)
             const tunnelUrl = "http://localhost:8080/tunnel";
             const tunnel = new Guacamole.HTTPTunnel(tunnelUrl);
 
-            // Tunnel event handlers
-            tunnel.onerror = (status) => {
-                console.error('❌ Tunnel Hatası:', status);
-                let errorMsg = '';
-                switch (status.code) {
-                    case 256: errorMsg = 'İstemci tarayıcı desteklenmiyor'; break;
-                    case 512: errorMsg = 'Guacamole sunucu hatası'; break;
-                    case 513: errorMsg = 'Sunucu meşgul'; break;
-                    case 514: errorMsg = 'Zaman aşımı'; break;
-                    case 515: errorMsg = 'Yetkilendirme/Bağlantı hatası'; break;
-                    case 519: errorMsg = 'Sunucuya ulaşılamıyor'; break;
-                    default: errorMsg = `Hata Kodu: ${status.code}`;
-                }
-                displayElement.innerHTML = `<div class="alert alert-danger m-3">${errorMsg}</div>`;
-            };
-
-            // Guacamole Client oluştur
+            // Client oluştur
             this.client = new Guacamole.Client(tunnel);
 
-            // Display (Canvas) ekle
+            // Display (Canvas)
             const display = this.client.getDisplay();
             const canvas = display.getElement();
 
-            // Canvas Stilleri
+            // Canvas stilleri (Başlangıç)
             canvas.style.position = 'absolute';
             canvas.style.left = '0';
             canvas.style.top = '0';
-            canvas.style.width = '100%';
-            canvas.style.height = '100%';
-            canvas.style.objectFit = 'contain';
+            canvas.style.cursor = 'none'; // RDP içinde mouse gizlensin
 
-            displayElement.appendChild(canvas);
+            this.displayElement.appendChild(canvas);
 
-            // Client state tracking + OTOMATİK FULL-SCREEN
+            // --- EVENTLER ---
+
+            this.client.onerror = (error) => console.error('Client Hatası:', error);
+            tunnel.onerror = (status) => console.error('Tunnel Hatası:', status);
+
             this.client.onstatechange = (state) => {
-                const states = ['IDLE', 'CONNECTING', 'WAITING', 'CONNECTED', 'DISCONNECTING', 'DISCONNECTED'];
-                console.log(`🔄 Client State: ${states[state] || state}`);
-
                 if (state === 3) { // CONNECTED
-                    console.log('🎉 RDP BAŞARIYLA BAĞLANDI!');
+                    console.log("✅ Bağlandı.");
 
-                    // Otomatik Full-Screen (İsteğe bağlı, tarayıcı izin verirse)
-                    setTimeout(() => {
-                        this.enterFullScreen(displayElement);
-                    }, 500);
+                    // Bağlantı kurulunca ilk oturtmayı yap
+                    this.applyResponsiveScale();
 
-                } else if (state === 5) { // DISCONNECTED
-                    console.log('❌ Bağlantı kesildi');
+                    // İlk açılışta otomatik tam ekran (İsteğe bağlı)
+                    setTimeout(() => { this.enterFullScreen(); }, 500);
+
+                    // Pencere boyutu değişirse yeniden sığdır
+                    window.addEventListener('resize', this.handleResize);
+                }
+                else if (state === 5) { // DISCONNECTED
+                    console.log("❌ Bağlantı kesildi.");
+                    window.removeEventListener('resize', this.handleResize);
                     if (document.fullscreenElement) {
                         document.exitFullscreen().catch(() => { });
                     }
-                    displayElement.innerHTML = '<div class="text-white p-5 text-center">Bağlantı sonlandı.</div>';
+                    this.displayElement.innerHTML = '<div class="text-white p-5 text-center">Bağlantı sonlandı.</div>';
                 }
             };
 
-            this.client.onerror = (error) => {
-                console.error('❌ Client Hatası:', error);
-            };
-
-            // Giriş Aygıtları (Klavye & Mouse)
+            // Giriş Aygıtları
             this.keyboard = new Guacamole.Keyboard(document);
             this.keyboard.onkeydown = (keysym) => { if (this.client) this.client.sendKeyEvent(1, keysym); };
             this.keyboard.onkeyup = (keysym) => { if (this.client) this.client.sendKeyEvent(0, keysym); };
@@ -106,93 +85,125 @@ window.GuacInterop = {
                 if (this.client) this.client.sendMouseState(state);
             };
 
-            // BAĞLAN
-            const width = Math.floor(displayElement.clientWidth) || 1024;
-            const height = Math.floor(displayElement.clientHeight) || 768;
+            // --- BAĞLAN ---
+            const width = Math.floor(this.displayElement.clientWidth) || 1024;
+            const height = Math.floor(this.displayElement.clientHeight) || 768;
 
             const params = `token=${encodeURIComponent(authToken)}` +
                 `&GUAC_DATA_SOURCE=mysql` +
                 `&GUAC_ID=${encodeURIComponent(connectionId)}` +
                 `&GUAC_TYPE=c` +
                 `&GUAC_WIDTH=${width}` +
-                `&GUAC_HEIGHT=${height}`;
+                `&GUAC_HEIGHT=${height}` +
+                `&GUAC_DPI=96`;
 
             this.client.connect(params);
 
+            // Fullscreen değişikliklerini dinle (ESC basıldığında scale düzelsin diye)
+            document.addEventListener('fullscreenchange', () => {
+                setTimeout(() => { this.applyResponsiveScale(); }, 100);
+            });
+
         } catch (ex) {
-            console.error('❌ Başlatma hatası:', ex);
+            console.error('Başlatma hatası:', ex);
         }
     },
 
-    // 2. Full Screen Modu
-    enterFullScreen: function (displayElement) {
-        if (!displayElement.requestFullscreen) {
-            this.applyResponsiveScale(displayElement);
+    // 2. Full Screen Modu (GÜNCELLENDİ: Parametre almaz, global elementi kullanır)
+    enterFullScreen: function () {
+        const el = this.displayElement;
+        if (!el) {
+            console.warn('⚠️ Display element bulunamadı, tam ekran yapılamıyor.');
             return;
         }
-        displayElement.requestFullscreen().then(() => {
-            setTimeout(() => {
-                if (this.client) {
-                    const display = this.client.getDisplay();
-                    const scale = Math.min(screen.width / display.getWidth(), screen.height / display.getHeight());
-                    display.scale(scale);
-                }
-            }, 300);
-        }).catch((err) => {
-            console.warn('⚠️ Full-screen reddedildi:', err.message);
-            this.applyResponsiveScale(displayElement);
-        });
 
-        // ESC ile çıkıldığında scale düzelt
-        displayElement.addEventListener('fullscreenchange', () => {
-            if (!document.fullscreenElement && this.client) {
-                this.applyResponsiveScale(displayElement);
+        if (!document.fullscreenElement) {
+            if (el.requestFullscreen) {
+                el.requestFullscreen().then(() => {
+                    console.log('✅ Full-screen aktif');
+                    // Tam ekrana geçince scale'i güncelle
+                    setTimeout(() => { this.applyResponsiveScale(); }, 300);
+                }).catch((err) => {
+                    console.warn('⚠️ Full-screen reddedildi:', err.message);
+                });
             }
-        });
+        }
     },
 
-    // 3. Responsive Scale
-    applyResponsiveScale: function (displayElement) {
-        if (!this.client) return;
+    // 3. Responsive Scale (Akıllı Sığdırma ve Ortalama)
+    applyResponsiveScale: function () {
+        if (!this.client || !this.displayElement) return;
+
         const display = this.client.getDisplay();
-        const scale = Math.min(
-            displayElement.clientWidth / display.getWidth(),
-            displayElement.clientHeight / display.getHeight()
-        );
+        const canvas = display.getElement();
+
+        // Container boyutlarını al (Tam ekran veya normal)
+        let containerWidth, containerHeight;
+
+        if (document.fullscreenElement) {
+            containerWidth = window.innerWidth;
+            containerHeight = window.innerHeight;
+        } else {
+            containerWidth = this.displayElement.clientWidth;
+            containerHeight = this.displayElement.clientHeight;
+        }
+
+        // RDP Orijinal Boyutları
+        const displayWidth = display.getWidth();
+        const displayHeight = display.getHeight();
+
+        if (displayWidth === 0 || displayHeight === 0) return;
+
+        // En-boy oranını koruyarak sığdırma çarpanı
+        const scaleX = containerWidth / displayWidth;
+        const scaleY = containerHeight / displayHeight;
+        const scale = Math.min(scaleX, scaleY);
+
+        // Scale uygula
         display.scale(scale);
+
+        // Canvas'ı matematiksel olarak ortala
+        const scaledWidth = displayWidth * scale;
+        const scaledHeight = displayHeight * scale;
+
+        canvas.style.width = scaledWidth + 'px';
+        canvas.style.height = scaledHeight + 'px';
+
+        // Left ve Top değerleri ile tam ortaya koy
+        canvas.style.left = ((containerWidth - scaledWidth) / 2) + 'px';
+        canvas.style.top = ((containerHeight - scaledHeight) / 2) + 'px';
+
+        console.log(`📏 Scale: ${scale.toFixed(3)} | Container: ${containerWidth}x${containerHeight}`);
     },
 
-    // 4. Bağlantı Kesme ve Temizleme
+    // Resize Handler (Debounce ile performanslı çalışma)
+    handleResize: function () {
+        if (window.GuacInterop.resizeTimeout) clearTimeout(window.GuacInterop.resizeTimeout);
+        window.GuacInterop.resizeTimeout = setTimeout(() => {
+            window.GuacInterop.applyResponsiveScale();
+        }, 100);
+    },
+
+    // 4. Bağlantı Kesme
     disconnect: function () {
         console.log('🔌 Disconnecting...');
 
-        // Full-screen çıkış
         if (document.fullscreenElement) {
             document.exitFullscreen().catch(() => { });
         }
 
-        // Client durdur
         if (this.client) {
             this.client.disconnect();
             this.client = null;
         }
 
-        // Listener temizle
-        if (this.keyboard) {
-            this.keyboard.onkeydown = null;
-            this.keyboard.onkeyup = null;
-            this.keyboard = null;
-        }
-        if (this.mouse) {
-            this.mouse.onmousedown = null;
-            this.mouse.onmouseup = null;
-            this.mouse.onmousemove = null;
-            this.mouse = null;
-        }
+        window.removeEventListener('resize', this.handleResize);
 
-        // Ekranı temizle
-        const display = document.getElementById("guacamole-display");
-        if (display) display.innerHTML = "";
+        if (this.keyboard) { this.keyboard.onkeydown = null; this.keyboard.onkeyup = null; this.keyboard = null; }
+        if (this.mouse) { this.mouse.onmousedown = null; this.mouse.onmouseup = null; this.mouse.onmousemove = null; this.mouse = null; }
+
+        if (this.displayElement) this.displayElement.innerHTML = "";
+        this.displayElement = null;
 
         console.log('✅ Temizlendi.');
     }
