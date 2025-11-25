@@ -4,37 +4,95 @@
 @inject RDPApp.Services.GuacamoleService GuacService
 @inject RDPApp.Services.UserSession UserSession
 
-<div class="d-flex justify-content-center align-items-center vh-100 bg-light">
-    <div class="card shadow p-4" style="width: 400px;">
-        <div class="text-center mb-4">
-            <h2 class="text-primary">Giriş Yap</h2>
-            <p class="text-muted">Kurumsal RDP Sistemi</p>
-        </div>
-
-        @if (!string.IsNullOrEmpty(ErrorMessage))
-        {
-            <div class="alert alert-danger">@ErrorMessage</div>
+<div class="d-flex justify-content-center align-items-center vh-100 bg-gradient" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+    <style>
+        .login-card .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
         }
 
-        <div class="mb-3">
-            <label>Kullanıcı Adı</label>
-            <input class="form-control" @bind="Username" placeholder="Kullanıcı adınız" />
-        </div>
+        .login-card .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
 
-        <div class="mb-3">
-            <label>Şifre</label>
-            <input type="password" class="form-control" @bind="Password" placeholder="Şifreniz" />
-        </div>
-
-        <button class="btn btn-primary w-100" @onclick="HandleLogin" disabled="@IsLoading">
-            @if (IsLoading)
-            {
-                <span class="spinner-border spinner-border-sm me-2"></span>
+            .login-card .btn-primary:hover:not(:disabled) {
+                transform: translateY(-2px);
+                box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
+                background: linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%);
             }
-            Giriş Yap
-        </button>
+
+            .login-card .btn-primary:active:not(:disabled) {
+                transform: translateY(0);
+            }
+    </style>
+
+    <div class="card shadow-lg border-0 login-card" style="width: 420px; border-radius: 1rem;">
+        <div class="card-body p-5">
+            <div class="text-center mb-4">
+                <div class="bg-primary bg-opacity-10 rounded-circle d-inline-flex p-3 mb-3">
+                    <span class="oi oi-monitor text-primary" style="font-size: 2.5rem;"></span>
+                </div>
+                <h2 class="fw-bold text-dark mb-2">Hoş Geldiniz</h2>
+                <p class="text-muted mb-0">Kurumsal RDP Yönetim Sistemi</p>
+            </div>
+
+            @if (!string.IsNullOrEmpty(ErrorMessage))
+            {
+                <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center" role="alert">
+                    <span class="oi oi-warning me-2"></span>
+                    <div>@ErrorMessage</div>
+                </div>
+            }
+
+            <form @onsubmit="HandleLogin" @onsubmit:preventDefault="true">
+                <div class="mb-4">
+                    <label class="form-label fw-semibold text-dark">
+                        <span class="oi oi-person me-2"></span>Kullanıcı Adı
+                    </label>
+                    <input class="form-control form-control-lg"
+                           @bind="Username"
+                           placeholder="Kullanıcı adınızı girin"
+                           disabled="@IsLoading"
+                           autocomplete="username" />
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label fw-semibold text-dark">
+                        <span class="oi oi-lock-locked me-2"></span>Şifre
+                    </label>
+                    <input type="password"
+                           class="form-control form-control-lg"
+                           @bind="Password"
+                           placeholder="Şifrenizi girin"
+                           disabled="@IsLoading"
+                           autocomplete="current-password" />
+                </div>
+
+                <button type="submit"
+                        class="btn btn-primary btn-lg w-100 fw-semibold"
+                        disabled="@IsLoading"
+                        style="border-radius: 0.5rem;">
+                    @if (IsLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                        <span>Giriş yapılıyor...</span>
+                    }
+                    else
+                    {
+                        <span class="oi oi-account-login me-2"></span>
+                        <span>Giriş Yap</span>
+                    }
+                </button>
+            </form>
+
+            
+        </div>
     </div>
 </div>
+
+
 
 @code {
     private string Username;
