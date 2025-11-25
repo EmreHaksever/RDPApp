@@ -5,10 +5,10 @@
         public string Username { get; set; }
         public string AuthToken { get; set; }
 
-        // Admin olup olmadığını basitçe kullanıcı adına göre belirliyoruz.
-        // İstersen buraya "guacadmin" gibi admin kullanıcının adını yazabilirsin.
+        
+        // Admin kullanıcı adı buraya yazılacak
         public bool IsAdmin => Username?.ToLower() == "admin" || Username?.ToLower() == "guacadmin";
-        //public bool IsAdmin => true;
+        
 
         public bool IsLoggedIn => !string.IsNullOrEmpty(AuthToken);
     }
