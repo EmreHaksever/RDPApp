@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿/*
+
+using Microsoft.AspNetCore.Mvc;
 using RDPApp.Services;
 using System.Threading.Tasks;
 
@@ -90,3 +92,5 @@ namespace RDPApp.Controllers
         }
     }
 }
+
+*/

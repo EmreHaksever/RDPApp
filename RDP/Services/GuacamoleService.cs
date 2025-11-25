@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using Microsoft.Extensions.Configuration; // Configuration için gerekli
+using Microsoft.Extensions.Configuration;
 
 namespace RDPApp.Services
 {
@@ -13,7 +13,7 @@ namespace RDPApp.Services
     public record GuacConnectionResponse(string identifier);
     public record GuacTunnelResponse(string tunnelId, string connectionId);
 
-    // YENİ: Bağlantı listesi için model
+    // Bağlantı listesi için model
     public class GuacConnectionDetail
     {
         public string Identifier { get; set; }
@@ -24,7 +24,13 @@ namespace RDPApp.Services
     public class GuacamoleService
     {
         private readonly IHttpClientFactory _httpClientFactory;
-        private readonly IConfiguration _configuration; // Yapılandırma servisi
+        private readonly IConfiguration _configuration;
+
+        // =========================================================================
+        // AYAR: Bağlantıların otomatik atanacağı Guacamole Grubu
+        // Guacamole panelinde bu isimde bir grup oluşturup kullanıcıları içine atmalısın!
+        // =========================================================================
+        private const string TargetUserGroup = "Yazılım";
 
         public GuacamoleService(IHttpClientFactory httpClientFactory, IConfiguration configuration)
         {
@@ -32,40 +38,14 @@ namespace RDPApp.Services
             _configuration = configuration;
         }
 
-        // =========================================================================
-        // AYARLAR: Değerler artık appsettings.json veya User Secrets'tan okunuyor
-        // =========================================================================
         private string ApiUrl => _configuration["Guacamole:ApiUrl"] ?? "http://localhost:8080/api/";
-
-        // DataSource ayarını da config'den okuyoruz, yoksa varsayılan 'mysql'
         private string DataSource => _configuration["Guacamole:DataSource"] ?? "mysql";
-
-        private string MasterUser => _configuration["Guacamole:MasterUser"] ?? "admin";
-
-        // ŞİFRE ARTIK KODDA YOK! Güvenli alandan okunuyor.
-        private string MasterPass => _configuration["Guacamole:MasterPassword"];
 
         private HttpClient CreateGuacClient()
         {
             var client = _httpClientFactory.CreateClient("GuacamoleAPI");
             client.BaseAddress = new Uri(ApiUrl);
             return client;
-        }
-
-        // =========================================================================
-        // Master Token Alma (Admin yetkisiyle)
-        // =========================================================================
-        public async Task<string?> GetMasterTokenAsync()
-        {
-            // Şifre kontrolü
-            if (string.IsNullOrEmpty(MasterPass))
-            {
-                Console.WriteLine("KRİTİK HATA: Admin şifresi (Guacamole:MasterPassword) yapılandırmada bulunamadı!");
-                return null;
-            }
-
-            // Her seferinde Admin adına taze bir token alır.
-            return await GetAuthTokenAsync(MasterUser, MasterPass);
         }
 
         // 1. Token Alma
@@ -98,7 +78,36 @@ namespace RDPApp.Services
             }
         }
 
-        // 2. Bağlantıları Listeleme
+        // 2. Admin Kontrolü (Guacamole Yetkilerine Göre)
+        public async Task<bool> CheckIfAdminAsync(string authToken)
+        {
+            var client = CreateGuacClient();
+            var url = $"session/data/{DataSource}/self/permissions?token={authToken}";
+
+            try
+            {
+                var response = await client.GetAsync(url);
+                if (!response.IsSuccessStatusCode) return false;
+
+                var json = await response.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
+
+                // 'systemPermissions' altında admin veya oluşturma yetkisi var mı?
+                if (doc.RootElement.TryGetProperty("systemPermissions", out var sysPerms))
+                {
+                    if (sysPerms.TryGetProperty("ADMINISTER", out var p1) && p1.GetBoolean()) return true;
+                    if (sysPerms.TryGetProperty("CREATE_CONNECTION", out var p2) && p2.GetBoolean()) return true;
+                    if (sysPerms.TryGetProperty("CREATE_USER", out var p3) && p3.GetBoolean()) return true;
+                }
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        // 3. Bağlantıları Listeleme (Herkes kendi token'ı ile)
         public async Task<List<GuacConnectionDetail>> GetConnectionsAsync(string authToken)
         {
             var client = CreateGuacClient();
@@ -107,11 +116,7 @@ namespace RDPApp.Services
             try
             {
                 var response = await client.GetAsync(url);
-                if (!response.IsSuccessStatusCode)
-                {
-                    Console.WriteLine($"Bağlantı Listesi Çekilemedi: {response.StatusCode}");
-                    return new List<GuacConnectionDetail>();
-                }
+                if (!response.IsSuccessStatusCode) return new List<GuacConnectionDetail>();
 
                 var json = await response.Content.ReadAsStringAsync();
                 var rawData = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json);
@@ -147,8 +152,10 @@ namespace RDPApp.Services
             }
         }
 
-        // 3. Bağlantı Oluşturma (Admin Paneli İçin)
-        public async Task<string?> CreateConnectionAsync(string authToken, string host, string username, string password)
+        // 4. Bağlantı Oluşturma + Otomatik Grup Yetkilendirmesi
+        // 4. Bağlantı Oluşturma + Otomatik Grup Yetkilendirmesi
+        // GÜNCELLEME: 'connectionName' parametresi eklendi
+        public async Task<string?> CreateConnectionAsync(string authToken, string connectionName, string host, string username, string password)
         {
             var client = CreateGuacClient();
 
@@ -164,9 +171,10 @@ namespace RDPApp.Services
                 {"read-timeout", "20000"}
             };
 
+            // GÜNCELLEME: Adminin girdiği isim (connectionName) burada kullanılıyor
             var connectionData = new
             {
-                name = $"RemoteSession-{Guid.NewGuid().ToString().Substring(0, 4)}",
+                name = connectionName,
                 protocol = "rdp",
                 parentIdentifier = "ROOT",
                 type = "ORGANIZATIONAL",
@@ -179,28 +187,61 @@ namespace RDPApp.Services
 
             var url = $"session/data/{DataSource}/connections?token={authToken}";
 
+            string newConnectionId = null;
+
             try
             {
+                // A. Bağlantıyı Oluştur
                 var response = await client.PostAsync(url, content);
 
                 if (!response.IsSuccessStatusCode)
                 {
                     string errorContent = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"Guacamole Bağlantı Oluşturma Başarısız: {response.StatusCode}");
-                    Console.WriteLine($"Guacamole Hata Detayı: {errorContent}");
+                    Console.WriteLine($"Hata: {response.StatusCode} - {errorContent}");
                     return null;
                 }
 
                 var responseJson = await response.Content.ReadAsStringAsync();
                 var data = JsonSerializer.Deserialize<GuacConnectionResponse>(responseJson);
-
-                return data?.identifier;
+                newConnectionId = data?.identifier;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Bağlantı Oluşturma Sırasında Hata: {ex.Message}");
+                Console.WriteLine($"Bağlantı Oluşturma Hatası: {ex.Message}");
                 return null;
             }
+
+            // B. Bağlantı Başarılıysa: Gruba Yetki Ver
+            if (!string.IsNullOrEmpty(newConnectionId))
+            {
+                var permissionData = new[]
+                {
+                    new {
+                        op = "add",
+                        path = $"/connectionPermissions/{newConnectionId}",
+                        value = "READ"
+                    }
+                };
+
+                var permJson = JsonSerializer.Serialize(permissionData);
+                var permContent = new StringContent(permJson, Encoding.UTF8, "application/json");
+                var permUrl = $"session/data/{DataSource}/userGroups/{TargetUserGroup}/permissions?token={authToken}";
+
+                try
+                {
+                    var request = new HttpRequestMessage(new HttpMethod("PATCH"), permUrl)
+                    {
+                        Content = permContent
+                    };
+                    await client.SendAsync(request);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Grup Yetkilendirme Hatası: {ex.Message}");
+                }
+            }
+
+            return newConnectionId;
         }
 
         public async Task<string?> GetTunnelKeyAsync(string authToken, string connectionId)
@@ -211,22 +252,32 @@ namespace RDPApp.Services
             try
             {
                 var response = await client.PostAsync(url, null);
-                if (!response.IsSuccessStatusCode)
-                {
-                    string errorContent = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"Tünel Anahtarı Alma Başarısız: {response.StatusCode}");
-                    return null;
-                }
+                if (!response.IsSuccessStatusCode) return null;
 
                 var responseJson = await response.Content.ReadAsStringAsync();
                 var data = JsonSerializer.Deserialize<GuacTunnelResponse>(responseJson);
                 return data?.tunnelId;
             }
+            catch { return null; }
+        }
+    
+    // YENİ: Bağlantı Silme Metodu
+        public async Task<bool> DeleteConnectionAsync(string authToken, string connectionIdentifier)
+        {
+            var client = CreateGuacClient();
+            var url = $"session/data/{DataSource}/connections/{connectionIdentifier}?token={authToken}";
+
+            try
+            {
+                var response = await client.DeleteAsync(url);
+                return response.IsSuccessStatusCode;
+            }
             catch (Exception ex)
             {
-                Console.WriteLine($"Tünel Anahtarı Alma Sırasında Hata: {ex.Message}");
-                return null;
+                Console.WriteLine($"Silme Hatası: {ex.Message}");
+                return false;
             }
         }
-    }
-}
+    } // Class bitişi
+} // Namespace bitişi
+      

@@ -28,11 +28,24 @@
                 <div class="p-3 border-bottom bg-white">
                     <h6 class="text-primary mb-3"><span class="oi oi-plus me-1"></span>Yeni Bağlantı Oluştur</h6>
 
-                    <input class="form-control form-control-sm mb-2" @bind="NewHost" placeholder="IP Adresi (192.168.1.X)" />
-                    <input class="form-control form-control-sm mb-2" @bind="NewUser" placeholder="PC Kullanıcı Adı" />
-                    <input type="password" class="form-control form-control-sm mb-2" @bind="NewPass" placeholder="PC Şifresi" />
+                    <div class="mb-2">
+                        <label class="form-label small text-muted mb-0">Bağlantı Adı</label>
+                        <input class="form-control form-control-sm" @bind="NewConnectionName" placeholder="Örn: Muhasebe PC" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small text-muted mb-0">IP Adresi</label>
+                        <input class="form-control form-control-sm" @bind="NewHost" placeholder="192.168.1.X" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small text-muted mb-0">Kullanıcı Adı</label>
+                        <input class="form-control form-control-sm" @bind="NewUser" placeholder="PC Kullanıcı Adı" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small text-muted mb-0">Şifre</label>
+                        <input type="password" class="form-control form-control-sm" @bind="NewPass" placeholder="PC Şifresi" />
+                    </div>
 
-                    <button class="btn btn-sm btn-outline-primary w-100" @onclick="CreateConnection" disabled="@IsCreating">
+                    <button class="btn btn-sm btn-outline-primary w-100 mt-2" @onclick="CreateConnection" disabled="@IsCreating">
                         @(IsCreating ? "Oluşturuluyor..." : "Bağlantıyı Kaydet")
                     </button>
 
@@ -59,32 +72,55 @@
                     <div class="list-group">
                         @foreach (var conn in AvailableConnections)
                         {
-                            <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center @(ActiveConnectionId == conn.Identifier ? "active" : "")"
-                                    @onclick="() => ConnectToSession(conn)">
-                                <span class="small fw-bold">@conn.Name</span>
-                                @if (ActiveConnectionId == conn.Identifier)
+                            <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center p-0 @(ActiveConnectionId == conn.Identifier ? "border-primary" : "")">
+
+                                <button type="button" class="btn btn-link text-decoration-none text-dark text-start flex-grow-1 p-3"
+                                        @onclick="() => ConnectToSession(conn)">
+                                    <span class="fw-bold">@conn.Name</span>
+                                    @if (ActiveConnectionId == conn.Identifier)
+                                    {
+                                        <span class="badge bg-primary ms-2">Aktif</span>
+                                    }
+                                </button>
+
+                                @if (UserSession.IsAdmin)
                                 {
-                                    <span class="badge bg-light text-dark">Aktif</span>
+                                    <button class="btn btn-link text-danger p-3" @onclick="() => DeleteConnection(conn)" title="Bu bağlantıyı sil">
+                                        <span class="oi oi-trash"></span>
+                                    </button>
                                 }
-                            </button>
+                            </div>
                         }
                     </div>
                 }
             </div>
         </div>
 
-        <div class="col-md-9 p-0 bg-dark position-relative">
-            @if (string.IsNullOrEmpty(ActiveConnectionId))
+        <div class="col-md-9 p-0 bg-dark position-relative d-flex flex-column">
+
+            @if (!string.IsNullOrEmpty(ActiveConnectionId))
             {
-                <div class="d-flex justify-content-center align-items-center h-100 text-white-50">
-                    <div class="text-center">
-                        <h1 class="display-1"><span class="oi oi-monitor"></span></h1>
-                        <p>Bağlanmak için soldan bir bilgisayar seçin.</p>
-                    </div>
+                <div class="bg-secondary text-white p-2 d-flex justify-content-between align-items-center" style="flex: 0 0 auto;">
+                    <span class="small ms-2"><span class="oi oi-monitor me-1"></span>Aktif Oturum</span>
+                    <button class="btn btn-sm btn-danger me-2" @onclick="DisconnectSession">
+                        <span class="oi oi-power-standby me-1"></span> Bağlantıyı Kes
+                    </button>
                 </div>
             }
 
-            <div id="guacamole-display" style="width: 100%; height: 100%;"></div>
+            <div style="flex-grow: 1; position: relative; overflow: hidden;">
+                @if (string.IsNullOrEmpty(ActiveConnectionId))
+                {
+                    <div class="d-flex justify-content-center align-items-center h-100 text-white-50">
+                        <div class="text-center">
+                            <h1 class="display-1"><span class="oi oi-monitor"></span></h1>
+                            <p>Bağlanmak için soldan bir bilgisayar seçin.</p>
+                        </div>
+                    </div>
+                }
+
+                <div id="guacamole-display" style="width: 100%; height: 100%;"></div>
+            </div>
         </div>
     </div>
 </div>
@@ -97,13 +133,12 @@
     private List<RDPApp.Services.GuacConnectionDetail> AvailableConnections;
     private string ActiveConnectionId;
 
-    // Yeni bağlantı değişkenleri (Admin)
-    private string NewHost, NewUser, NewPass, CreateMessage;
+    // Admin Değişkenleri
+    private string NewConnectionName, NewHost, NewUser, NewPass, CreateMessage;
     private bool IsCreating = false;
 
     protected override async Task OnInitializedAsync()
     {
-        // Güvenlik: Eğer giriş yapılmadıysa Login'e at
         if (!UserSession.IsLoggedIn)
         {
             NavManager.NavigateTo("/login");
@@ -115,37 +150,61 @@
 
     private async Task LoadConnections()
     {
-        // DEĞİŞİKLİK: Listeyi çekerken kullanıcının token'ı yerine Master Token kullanıyoruz.
-        // Böylece normal kullanıcılar da Admin'in oluşturduğu bağlantıları görebiliyor.
-        var masterToken = await GuacService.GetMasterTokenAsync();
-
-        if (!string.IsNullOrEmpty(masterToken))
-        {
-            AvailableConnections = await GuacService.GetConnectionsAsync(masterToken);
-        }
+        AvailableConnections = await GuacService.GetConnectionsAsync(UserSession.AuthToken);
     }
 
     // Admin: Yeni Bağlantı Oluşturma
     private async Task CreateConnection()
     {
-        if (string.IsNullOrWhiteSpace(NewHost)) return;
+        if (string.IsNullOrWhiteSpace(NewHost) || string.IsNullOrWhiteSpace(NewConnectionName))
+        {
+            CreateMessage = "Lütfen bağlantı adı ve IP adresini giriniz.";
+            return;
+        }
 
         IsCreating = true;
         CreateMessage = "";
 
-        var newId = await GuacService.CreateConnectionAsync(UserSession.AuthToken, NewHost, NewUser, NewPass);
+        var newId = await GuacService.CreateConnectionAsync(UserSession.AuthToken, NewConnectionName, NewHost, NewUser, NewPass);
 
         if (!string.IsNullOrEmpty(newId))
         {
             CreateMessage = "Bağlantı başarıyla eklendi!";
-            NewHost = NewUser = NewPass = ""; // Formu temizle
-            await LoadConnections(); // Listeyi yenile
+            NewConnectionName = NewHost = NewUser = NewPass = "";
+            await LoadConnections();
         }
         else
         {
-            CreateMessage = "Hata oluştu. Yetkiniz olmayabilir.";
+            CreateMessage = "Hata oluştu. Guacamole loglarını kontrol edin.";
         }
         IsCreating = false;
+    }
+
+    // Admin: Bağlantı Silme (YENİ)
+    private async Task DeleteConnection(RDPApp.Services.GuacConnectionDetail conn)
+    {
+        // Basit bir JavaScript onayı alabiliriz (Opsiyonel ama önerilir)
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"'{conn.Name}' bağlantısını silmek istediğinize emin misiniz?");
+
+        if (confirmed)
+        {
+            // Eğer silinen bağlantı şu an açıksa, önce onu kapatalım
+            if (ActiveConnectionId == conn.Identifier)
+            {
+                await DisconnectSession();
+            }
+
+            bool success = await GuacService.DeleteConnectionAsync(UserSession.AuthToken, conn.Identifier);
+            if (success)
+            {
+                await LoadConnections(); // Listeyi güncelle
+            }
+            else
+            {
+                // Hata mesajı gösterebilirsin
+                await JSRuntime.InvokeVoidAsync("alert", "Silme işlemi başarısız oldu.");
+            }
+        }
     }
 
     // Bağlantı Başlatma
@@ -153,21 +212,28 @@
     {
         if (ActiveConnectionId == conn.Identifier) return;
 
-        await JSRuntime.InvokeVoidAsync("GuacInterop.disconnect");
+        await DisconnectSession(); // Temiz bir başlangıç için önce kes
 
         ActiveConnectionId = conn.Identifier;
 
-        // DEĞİŞİKLİK: Bağlanırken de Master Token kullanıyoruz.
-        var masterToken = await GuacService.GetMasterTokenAsync();
+        await JSRuntime.InvokeVoidAsync(
+            "GuacInterop.startClient",
+            UserSession.AuthToken,
+            conn.Identifier,
+            "guacamole-display"
+        );
+    }
 
-        if (!string.IsNullOrEmpty(masterToken))
+    // Bağlantıyı Kesme (YENİ)
+    private async Task DisconnectSession()
+    {
+        if (!string.IsNullOrEmpty(ActiveConnectionId))
         {
-            await JSRuntime.InvokeVoidAsync(
-                "GuacInterop.startClient",
-                masterToken, // Buraya UserSession.AuthToken yerine masterToken koyduk
-                conn.Identifier,
-                "guacamole-display"
-            );
+            // 1. JS tarafında bağlantıyı kopar ve ekranı temizle
+            await JSRuntime.InvokeVoidAsync("GuacInterop.disconnect");
+
+            // 2. UI durumunu güncelle (Aktif bağlantı yok)
+            ActiveConnectionId = null;
         }
     }
 

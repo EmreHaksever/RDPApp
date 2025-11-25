@@ -7,4 +7,24 @@
     <UserSecretsId>ad76ab03-49a1-4d34-aca0-d13065495e8f</UserSecretsId>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Compile Remove="Controller\RDPController.cs" />
+    <Compile Remove="Data\WeatherForecast.cs" />
+    <Compile Remove="Data\WeatherForecastService.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Remove="Pages\AdminPage.razor" />
+    <Content Remove="Pages\Counter.razor" />
+    <Content Remove="Pages\FetchData.razor" />
+    <Content Remove="Pages\Index.razor" />
+    <Content Remove="Shared\NavMenu.razor" />
+    <Content Remove="Shared\SurveyPrompt.razor" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Controller\" />
+    <Folder Include="Data\" />
+  </ItemGroup>
+
 </Project>
