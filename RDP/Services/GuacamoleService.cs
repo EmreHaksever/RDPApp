@@ -152,7 +152,7 @@ namespace RDPApp.Services
             }
         }
 
-        // 4. Bağlantı Oluşturma + Otomatik Grup Yetkilendirmesi
+        
         // 4. Bağlantı Oluşturma + Otomatik Grup Yetkilendirmesi
         // GÜNCELLEME: 'connectionName' parametresi eklendi
         public async Task<string?> CreateConnectionAsync(string authToken, string connectionName, string host, string username, string password)
@@ -261,7 +261,7 @@ namespace RDPApp.Services
             catch { return null; }
         }
     
-    // YENİ: Bağlantı Silme Metodu
+        //  Bağlantı Silme Metodu
         public async Task<bool> DeleteConnectionAsync(string authToken, string connectionIdentifier)
         {
             var client = CreateGuacClient();
@@ -278,6 +278,6 @@ namespace RDPApp.Services
                 return false;
             }
         }
-    } // Class bitişi
-} // Namespace bitişi
+    }
+} 
       
