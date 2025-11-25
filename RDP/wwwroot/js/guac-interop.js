@@ -1,6 +1,4 @@
-﻿// wwwroot/js/guac-interop.js - FİNAL SÜRÜM (Auto-Fit + Tam Ekran Butonu Destekli)
-
-window.GuacInterop = {
+﻿window.GuacInterop = {
     client: null,
     keyboard: null,
     mouse: null,
