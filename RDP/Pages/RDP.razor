@@ -115,8 +115,14 @@
 
     private async Task LoadConnections()
     {
-        // Kullanıcının kendi token'ı ile listeyi çekiyoruz
-        AvailableConnections = await GuacService.GetConnectionsAsync(UserSession.AuthToken);
+        // DEĞİŞİKLİK: Listeyi çekerken kullanıcının token'ı yerine Master Token kullanıyoruz.
+        // Böylece normal kullanıcılar da Admin'in oluşturduğu bağlantıları görebiliyor.
+        var masterToken = await GuacService.GetMasterTokenAsync();
+
+        if (!string.IsNullOrEmpty(masterToken))
+        {
+            AvailableConnections = await GuacService.GetConnectionsAsync(masterToken);
+        }
     }
 
     // Admin: Yeni Bağlantı Oluşturma
@@ -147,18 +153,22 @@
     {
         if (ActiveConnectionId == conn.Identifier) return;
 
-        // Önceki bağlantıyı kes (JS tarafında temizlik)
         await JSRuntime.InvokeVoidAsync("GuacInterop.disconnect");
 
         ActiveConnectionId = conn.Identifier;
 
-        // Guacamole'ye mevcut token ve seçilen ID ile bağlan
-        await JSRuntime.InvokeVoidAsync(
-            "GuacInterop.startClient",
-            UserSession.AuthToken,
-            conn.Identifier,
-            "guacamole-display"
-        );
+        // DEĞİŞİKLİK: Bağlanırken de Master Token kullanıyoruz.
+        var masterToken = await GuacService.GetMasterTokenAsync();
+
+        if (!string.IsNullOrEmpty(masterToken))
+        {
+            await JSRuntime.InvokeVoidAsync(
+                "GuacInterop.startClient",
+                masterToken, // Buraya UserSession.AuthToken yerine masterToken koyduk
+                conn.Identifier,
+                "guacamole-display"
+            );
+        }
     }
 
     private void Logout()

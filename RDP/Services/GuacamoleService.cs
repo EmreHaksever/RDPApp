@@ -26,8 +26,14 @@ namespace RDPApp.Services
         private readonly IHttpClientFactory _httpClientFactory;
 
         // Docker kurulumuna göre veri kaynağı 'mysql', 'postgresql' veya 'default' olabilir.
-        // Genelde Docker kurulumlarında 'mysql' veya 'postgresql' kullanılır.
         private const string DataSource = "mysql";
+
+        // =========================================================================
+        // YENİ EKLENEN KISIM: Master (Admin) Kullanıcı Bilgileri
+        // =========================================================================
+        // Buraya Guacamole'de yetkili olan (bağlantıları oluşturan) kullanıcının bilgilerini gir.
+        private const string MasterUser = "admin";
+        private const string MasterPass = "admin";
 
         public GuacamoleService(IHttpClientFactory httpClientFactory)
         {
@@ -39,6 +45,16 @@ namespace RDPApp.Services
             var client = _httpClientFactory.CreateClient("GuacamoleAPI");
             client.BaseAddress = new Uri(GuacApiBaseUrl);
             return client;
+        }
+
+        // =========================================================================
+        // YENİ METOD: Master Token Alma
+        // =========================================================================
+        public async Task<string?> GetMasterTokenAsync()
+        {
+            // Her seferinde Admin adına taze bir token alır.
+            // Bu token sayesinde normal kullanıcılar da adminin oluşturduğu bağlantıları görebilir.
+            return await GetAuthTokenAsync(MasterUser, MasterPass);
         }
 
         // 1. Token Alma (Aynen Korundu)
@@ -71,13 +87,10 @@ namespace RDPApp.Services
             }
         }
 
-        // =========================================================================
-        // YENİ EKLENEN METOD: Kayıtlı Bağlantıları Listeleme
-        // =========================================================================
+        // 2. Bağlantıları Listeleme
         public async Task<List<GuacConnectionDetail>> GetConnectionsAsync(string authToken)
         {
             var client = CreateGuacClient();
-            // Guacamole API, bağlantıları bir Dictionary (Map) olarak döner.
             var url = $"session/data/{DataSource}/connections?token={authToken}";
 
             try
@@ -90,32 +103,24 @@ namespace RDPApp.Services
                 }
 
                 var json = await response.Content.ReadAsStringAsync();
-
-                // API Yanıtı şöyledir: { "1": { "name": "PC1", ... }, "2": { "name": "PC2"... } }
-                // Bu yüzden Dictionary<string, JsonElement> olarak parse ediyoruz.
                 var rawData = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json);
-
                 var connectionList = new List<GuacConnectionDetail>();
 
                 if (rawData != null)
                 {
                     foreach (var item in rawData)
                     {
-                        // item.Key = Connection ID (Örn: "3")
-                        // item.Value = Connection Detayları (Örn: { "name": "Muhasebe", "protocol": "rdp" ... })
-
                         string protocol = "unknown";
                         string name = "Bilinmeyen";
 
                         if (item.Value.TryGetProperty("protocol", out var p)) protocol = p.GetString();
                         if (item.Value.TryGetProperty("name", out var n)) name = n.GetString();
 
-                        // Sadece RDP olanları filtreleyelim (İsteğe bağlı, SSH vs. de varsa kaldırabilirsin)
                         if (protocol == "rdp")
                         {
                             connectionList.Add(new GuacConnectionDetail
                             {
-                                Identifier = item.Key, // Bu ID'yi connect metodunda kullanacağız
+                                Identifier = item.Key,
                                 Name = name,
                                 Protocol = protocol
                             });
@@ -131,10 +136,7 @@ namespace RDPApp.Services
             }
         }
 
-        // =========================================================================
-        // ESKİ METOD (Korundu): Dinamik Bağlantı Oluşturma
-        // (Admin panelinde yeni makine eklemek istersen bunu kullanabilirsin)
-        // =========================================================================
+        // 3. Bağlantı Oluşturma (Admin Paneli İçin)
         public async Task<string?> CreateConnectionAsync(string authToken, string host, string username, string password)
         {
             var client = CreateGuacClient();
@@ -193,24 +195,20 @@ namespace RDPApp.Services
         public async Task<string?> GetTunnelKeyAsync(string authToken, string connectionId)
         {
             var client = CreateGuacClient();
-
             var url = $"session/data/{DataSource}/connections/{connectionId}/tunnels?token={authToken}";
 
             try
             {
                 var response = await client.PostAsync(url, null);
-
                 if (!response.IsSuccessStatusCode)
                 {
                     string errorContent = await response.Content.ReadAsStringAsync();
                     Console.WriteLine($"Tünel Anahtarı Alma Başarısız: {response.StatusCode}");
-                    Console.WriteLine($"Guacamole Hata Detayı: {errorContent}");
                     return null;
                 }
 
                 var responseJson = await response.Content.ReadAsStringAsync();
                 var data = JsonSerializer.Deserialize<GuacTunnelResponse>(responseJson);
-
                 return data?.tunnelId;
             }
             catch (Exception ex)
