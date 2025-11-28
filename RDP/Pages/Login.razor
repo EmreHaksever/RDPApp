@@ -86,13 +86,9 @@
                     }
                 </button>
             </form>
-
-            
         </div>
     </div>
 </div>
-
-
 
 @code {
     private string Username;
@@ -105,23 +101,35 @@
         IsLoading = true;
         ErrorMessage = "";
 
-        // 1. Guacamole'ye bu bilgilerle giriş yapmayı dene
-        var token = await GuacService.GetAuthTokenAsync(Username, Password);
-
-        if (!string.IsNullOrEmpty(token))
+        try
         {
-            // 2. Başarılıysa oturum bilgilerini kaydet
-            UserSession.AuthToken = token;
-            UserSession.Username = Username;
+            // 1. Token al
+            var token = await GuacService.GetAuthTokenAsync(Username, Password);
 
-            // 3. RDP sayfasına yönlendir
+            if (string.IsNullOrEmpty(token))
+            {
+                ErrorMessage = "Kullanıcı adı veya şifre hatalı.";
+                IsLoading = false;
+                return;
+            }
+
+            // 2. Token'ı session'a kaydet
+            UserSession.Username = Username;
+            UserSession.AuthToken = token;
+
+            // 3. Guacamole'den admin kontrolü yap (dinamik olarak)
+            UserSession.IsAdmin = await GuacService.CheckIfAdminAsync(token);
+
+            // 4. RDP sayfasına yönlendir
             NavManager.NavigateTo("/rdp");
         }
-        else
+        catch (Exception ex)
         {
-            ErrorMessage = "Kullanıcı adı veya şifre hatalı.";
+            ErrorMessage = $"Giriş sırasında hata: {ex.Message}";
         }
-
-        IsLoading = false;
+        finally
+        {
+            IsLoading = false;
+        }
     }
 }

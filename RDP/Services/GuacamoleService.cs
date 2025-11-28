@@ -30,7 +30,7 @@ namespace RDPApp.Services
         // AYAR: Bağlantıların otomatik atanacağı Guacamole Grubu
         // Guacamole panelinde bu isimde bir grup oluşturup kullanıcıları içine atmalısın!
         // =========================================================================
-        private const string TargetUserGroup = "Yazılım";
+        private const string TargetUserGroup = "Yazılım 222";
 
         public GuacamoleService(IHttpClientFactory httpClientFactory, IConfiguration configuration)
         {
@@ -87,18 +87,32 @@ namespace RDPApp.Services
             try
             {
                 var response = await client.GetAsync(url);
-                if (!response.IsSuccessStatusCode) return false;
+                if (!response.IsSuccessStatusCode)
+                {
+                    return false;
+                }
 
                 var json = await response.Content.ReadAsStringAsync();
                 using var doc = JsonDocument.Parse(json);
 
-                // 'systemPermissions' altında admin veya oluşturma yetkisi var mı?
+                // systemPermissions bir ARRAY olarak geliyor
                 if (doc.RootElement.TryGetProperty("systemPermissions", out var sysPerms))
                 {
-                    if (sysPerms.TryGetProperty("ADMINISTER", out var p1) && p1.GetBoolean()) return true;
-                    if (sysPerms.TryGetProperty("CREATE_CONNECTION", out var p2) && p2.GetBoolean()) return true;
-                    if (sysPerms.TryGetProperty("CREATE_USER", out var p3) && p3.GetBoolean()) return true;
+                    // Array içindeki değerleri kontrol et
+                    foreach (var permission in sysPerms.EnumerateArray())
+                    {
+                        var permValue = permission.GetString();
+
+                        // Admin yetkilerinden herhangi biri varsa true döndür
+                        if (permValue == "ADMINISTER" ||
+                            permValue == "CREATE_CONNECTION" ||
+                            permValue == "CREATE_USER")
+                        {
+                            return true;
+                        }
+                    }
                 }
+
                 return false;
             }
             catch
@@ -152,9 +166,8 @@ namespace RDPApp.Services
             }
         }
 
-        
+
         // 4. Bağlantı Oluşturma + Otomatik Grup Yetkilendirmesi
-        // GÜNCELLEME: 'connectionName' parametresi eklendi
         public async Task<string?> CreateConnectionAsync(string authToken, string connectionName, string host, string username, string password)
         {
             var client = CreateGuacClient();
@@ -171,7 +184,6 @@ namespace RDPApp.Services
                 {"read-timeout", "20000"}
             };
 
-            // GÜNCELLEME: Adminin girdiği isim (connectionName) burada kullanılıyor
             var connectionData = new
             {
                 name = connectionName,
@@ -260,7 +272,7 @@ namespace RDPApp.Services
             }
             catch { return null; }
         }
-    
+
         //  Bağlantı Silme Metodu
         public async Task<bool> DeleteConnectionAsync(string authToken, string connectionIdentifier)
         {
@@ -279,5 +291,4 @@ namespace RDPApp.Services
             }
         }
     }
-} 
-      
+}
