@@ -26,12 +26,6 @@ namespace RDPApp.Services
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
 
-        // =========================================================================
-        // AYAR: Bağlantıların otomatik atanacağı Guacamole Grubu
-        // Guacamole panelinde bu isimde bir grup oluşturup kullanıcıları içine atmalısın!
-        // =========================================================================
-        private const string TargetUserGroup = "Yazılım 222";
-
         public GuacamoleService(IHttpClientFactory httpClientFactory, IConfiguration configuration)
         {
             _httpClientFactory = httpClientFactory;
@@ -167,7 +161,41 @@ namespace RDPApp.Services
         }
 
 
-        // 4. Bağlantı Oluşturma + Otomatik Grup Yetkilendirmesi
+        // Kullanıcının üye olduğu grupları getir
+        public async Task<List<string>> GetUserGroupsAsync(string authToken)
+        {
+            var client = CreateGuacClient();
+            var url = $"session/data/{DataSource}/self/effectivePermissions?token={authToken}";
+
+            try
+            {
+                var response = await client.GetAsync(url);
+                if (!response.IsSuccessStatusCode) return new List<string>();
+
+                var json = await response.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
+
+                var groups = new List<string>();
+
+                // userGroupPermissions içindeki tüm grupları al
+                if (doc.RootElement.TryGetProperty("userGroupPermissions", out var groupPerms))
+                {
+                    foreach (var group in groupPerms.EnumerateObject())
+                    {
+                        groups.Add(group.Name);
+                    }
+                }
+
+                return groups;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Grup Listesi Hatası: {ex.Message}");
+                return new List<string>();
+            }
+        }
+
+        // 4. Bağlantı Oluşturma + Kullanıcının Gruplarına Otomatik Yetkilendirme
         public async Task<string?> CreateConnectionAsync(string authToken, string connectionName, string host, string username, string password)
         {
             var client = CreateGuacClient();
@@ -223,33 +251,39 @@ namespace RDPApp.Services
                 return null;
             }
 
-            // B. Bağlantı Başarılıysa: Gruba Yetki Ver
+            // B. Bağlantı Başarılıysa: Kullanıcının tüm gruplarına yetki ver
             if (!string.IsNullOrEmpty(newConnectionId))
             {
-                var permissionData = new[]
-                {
-                    new {
-                        op = "add",
-                        path = $"/connectionPermissions/{newConnectionId}",
-                        value = "READ"
-                    }
-                };
+                var userGroups = await GetUserGroupsAsync(authToken);
 
-                var permJson = JsonSerializer.Serialize(permissionData);
-                var permContent = new StringContent(permJson, Encoding.UTF8, "application/json");
-                var permUrl = $"session/data/{DataSource}/userGroups/{TargetUserGroup}/permissions?token={authToken}";
-
-                try
+                foreach (var groupName in userGroups)
                 {
-                    var request = new HttpRequestMessage(new HttpMethod("PATCH"), permUrl)
+                    var permissionData = new[]
                     {
-                        Content = permContent
+                        new {
+                            op = "add",
+                            path = $"/connectionPermissions/{newConnectionId}",
+                            value = "READ"
+                        }
                     };
-                    await client.SendAsync(request);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Grup Yetkilendirme Hatası: {ex.Message}");
+
+                    var permJson = JsonSerializer.Serialize(permissionData);
+                    var permContent = new StringContent(permJson, Encoding.UTF8, "application/json");
+                    var permUrl = $"session/data/{DataSource}/userGroups/{groupName}/permissions?token={authToken}";
+
+                    try
+                    {
+                        var request = new HttpRequestMessage(new HttpMethod("PATCH"), permUrl)
+                        {
+                            Content = permContent
+                        };
+                        await client.SendAsync(request);
+                        Console.WriteLine($"✅ '{groupName}' grubuna yetki verildi");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"'{groupName}' grubuna yetki verme hatası: {ex.Message}");
+                    }
                 }
             }
 
