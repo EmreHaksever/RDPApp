@@ -1,7 +1,9 @@
 ﻿@page "/"
 @using Microsoft.AspNetCore.Components.Web
+@using Microsoft.Extensions.Configuration
 @namespace RDPApp.Pages
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@inject IConfiguration Configuration
 
 <!DOCTYPE html>
 <html lang="tr">
@@ -17,6 +19,10 @@
     <component type="typeof(HeadOutlet)" render-mode="ServerPrerendered" />
 </head>
 <body>
+    @{
+        // appsettings.json içindeki "GoogleMaps" altındaki "ApiKey" değerini oku
+        var googleApiKey = Configuration["GoogleMaps:ApiKey"];
+    }
     <component type="typeof(RDPApp.App)" render-mode="ServerPrerendered" />
 
     <div id="blazor-error-ui">
