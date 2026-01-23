@@ -45,6 +45,31 @@
 
             this.displayElement.appendChild(canvas);
 
+            // YENİ EKLENEN KISIM: Sürükle Bırak Olaylarını Yakalama
+            // ============================================================
+
+            // 1. Tarayıcının dosyayı açmasını engelle
+            const stopBrowserAction = (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+            };
+
+            this.displayElement.addEventListener('dragenter', stopBrowserAction);
+            this.displayElement.addEventListener('dragover', stopBrowserAction);
+
+            // 2. Dosya bırakıldığında yakala ve sunucuya gönder
+            this.displayElement.addEventListener('drop', (e) => {
+                stopBrowserAction(e);
+
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    for (let i = 0; i < files.length; i++) {
+                        this.uploadFile(files[i]);
+                    }
+                }
+            });
+            // ============================================================
+
             // --- EVENTLER ---
 
             this.client.onerror = (error) => console.error('Client Hatası:', error);
@@ -95,6 +120,41 @@
                 `&GUAC_HEIGHT=${height}` +
                 `&GUAC_DPI=96`;
 
+            // YENİ EKLENEN KISIM: Dosya İndirme (Download) Olayını Yakalama
+            // ============================================================
+            this.client.onfile = (stream, mimetype, filename) => {
+                console.log(`📥 Dosya indirme isteği geldi: ${filename}`);
+
+                // Dosya parçalarını birleştirmek için BlobReader kullan
+                const reader = new Guacamole.BlobReader(stream, mimetype);
+
+                // İndirme tamamlandığında çalışacak kod
+                reader.onend = () => {
+                    const blob = reader.getBlob();
+
+                    // Sanal bir <a> etiketi oluşturup tıklatarak indirmeyi başlat
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+
+                    // Temizlik
+                    setTimeout(() => {
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);
+                    }, 100);
+
+                    console.log("✅ Dosya başarıyla indirildi.");
+                };
+
+                // Veriyi almaya başla (Acknowledge)
+                // Bu komut sunucuya "Hazırım, gönder" der.
+                stream.sendAck("OK", 0x0000);
+            };
+            // ============================================================
+
             this.client.connect(params);
 
             // Fullscreen değişikliklerini dinle (ESC basıldığında scale düzelsin diye)
@@ -105,6 +165,33 @@
         } catch (ex) {
             console.error('Başlatma hatası:', ex);
         }
+    },
+
+    // YENİ EKLENEN FONKSİYON: Dosyayı Guacamole Stream'ine Yazma
+    // ============================================================
+    uploadFile: function (file) {
+        if (!this.client) return;
+
+        console.log(`📤 Dosya yükleniyor: ${file.name} (${file.size} bytes)`);
+
+        // Guacamole Client üzerinden dosya akışı (stream) oluştur
+        const stream = this.client.createFileStream(file.type, file.name);
+
+        // BlobWriter, dosyayı parçalara bölüp göndermeyi kolaylaştırır
+        // Not: Guacamole-common-js kütüphanesinde yer alır
+        const writer = new Guacamole.BlobWriter(stream);
+
+        writer.oncomplete = function () {
+            console.log("✅ Yükleme tamamlandı.");
+        };
+
+        writer.onerror = function (status, statusText) {
+            console.error("❌ Yükleme hatası:", status, statusText);
+        };
+
+        // Dosyayı gönder ve akışı kapat
+        writer.send(file);
+        writer.close();
     },
 
     // 2. Full Screen Modu (GÜNCELLENDİ: Parametre almaz, global elementi kullanır)
@@ -127,6 +214,8 @@
             }
         }
     },
+
+
 
     // 3. Responsive Scale (Akıllı Sığdırma ve Ortalama)
     applyResponsiveScale: function () {

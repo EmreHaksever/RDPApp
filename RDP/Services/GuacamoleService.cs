@@ -208,6 +208,13 @@ namespace RDPApp.Services
                 {"password", password},
                 {"ignore-cert", "true"},
                 {"security", "any"},
+
+                // --- DOSYA TRANSFER AYARLARI (BAŞLANGIÇ) --- YENİ EKLENEN KISIM
+                {"enable-drive", "true"},                   // Sanal sürücüyü aktif et
+                {"drive-path", "/tmp/guac-share"},          // Docker içindeki yol (Test ettiğimiz yol)
+                {"create-drive-path", "true"},              // Klasör yoksa otomatik oluştur
+                {"drive-name", "PaylasilanDosyalar"},          // Bilgisayarım içinde görünecek isim
+        // ------------------------------------------
                 {"timeout", "15000"},
                 {"read-timeout", "20000"}
             };
